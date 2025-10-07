@@ -1,5 +1,2 @@
 import { NextResponse } from "next/server";
-
-export async function GET() {
-  return new NextResponse("OK", { status: 200 });
-}
+export async function GET() { return NextResponse.text("OK", { status: 200 }); }

@@ -1,8 +1,10 @@
 // app/page.tsx
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-
 export default function Home() {
-  const session = cookies().get("realtor_session")?.value === "ok";
-  redirect(session ? "/contacts" : "/login");
+  return (
+    <main style={{padding: 24}}>
+      <h1>It works 🎉</h1>
+      <p>Root route rendering (no redirects yet).</p>
+      <p><a href="/login">Go to Login</a></p>
+    </main>
+  );
 }

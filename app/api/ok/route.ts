@@ -1,2 +1,4 @@
-import { NextResponse } from "next/server";
-export async function GET() { return NextResponse.text("OK", { status: 200 }); }
+// app/api/ok/route.ts
+export async function GET() {
+  return new Response("OK", { status: 200 });
+}

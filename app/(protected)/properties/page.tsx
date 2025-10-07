@@ -21,7 +21,7 @@ type Property = {
   ownerEmail?: string | null;
   primaryClientId?: string | null;
   notes?: string | null;
-  imageUrl?: string | null; // NEW: one photo per listing (URL)
+  imageUrl?: string | null; // photo URL after upload
   archived: boolean;
 };
 
@@ -38,6 +38,12 @@ function PropertiesPage() {
   const [items, setItems] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Partial<Property> | null>(null);
+
+  // upload UI state
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -76,13 +82,17 @@ function PropertiesPage() {
     const url = params.size ? `${pathname}?${params.toString()}` : pathname;
     router.replace(url, { scroll: false });
     setForm(null);
+    setFile(null);
+    setPreview(null);
+    setUploading(false);
+    setUploadErr(null);
   };
 
   useEffect(() => {
     let active = true;
     async function hydrate() {
       if (isNew) {
-        setForm({ addressLine1: "", city: "", forType: "RENT" } as any);
+        setForm({ addressLine1: "", city: "", forType: "RENT", imageUrl: null } as any);
         return;
       }
       if (editId) {
@@ -121,9 +131,42 @@ function PropertiesPage() {
       : items.filter(p =>
           `${p.addressLine1} ${p.city} ${p.ownerName ?? ""}`.toLowerCase().includes(s)
         );
-    // sort by addressLine1 alphabetically
-    return list.sort((a, b) => (a.addressLine1 || "").toLowerCase().localeCompare((b.addressLine1 || "").toLowerCase()));
+    return list.sort((a, b) =>
+      (a.addressLine1 || "").toLowerCase().localeCompare((b.addressLine1 || "").toLowerCase())
+    );
   }, [items, q]);
+
+  // ======== Upload handling ========
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] || null;
+    setFile(f);
+    setUploadErr(null);
+    if (f) {
+      const url = URL.createObjectURL(f);
+      setPreview(url);
+    } else {
+      setPreview(null);
+    }
+  }
+
+  async function uploadPhoto() {
+    if (!file) return;
+    setUploading(true); setUploadErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const j = await res.json();
+
+      if (!res.ok) throw new Error(j?.error || "Upload failed");
+      setForm(prev => ({ ...prev!, imageUrl: j.url as string }));
+    } catch (e: any) {
+      setUploadErr(e?.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <div className="space-y-6 w-full">
@@ -156,7 +199,7 @@ function PropertiesPage() {
               key={p.id}
               className="rounded-2xl bg-slate-900 border border-slate-800 shadow-md overflow-hidden hover:shadow-indigo-500/10 transition flex flex-col"
             >
-              {/* Image (optional) */}
+              {/* Image */}
               {p.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -215,11 +258,58 @@ function PropertiesPage() {
           footer={
             <>
               <button className="btn secondary" onClick={closeModal}>Cancel</button>
-              <button className="btn" onClick={save}>Save</button>
+              <button className="btn" onClick={save} disabled={uploading}>
+                {uploading ? "Uploading…" : "Save"}
+              </button>
             </>
           }
         >
           <div className="formGrid two">
+            {/* Upload UI */}
+            <div className="field" style={{ gridColumn: "1/-1" }}>
+              <label className="label">Photo</label>
+
+              {preview || form?.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={preview || (form?.imageUrl as string)}
+                  alt="Preview"
+                  className="w-full h-48 object-cover rounded-xl border border-slate-800 mb-3"
+                />
+              ) : null}
+
+              <input
+                className="input"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={onPick}
+              />
+
+              <div className="flex gap-2 mt-3">
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => { setFile(null); setPreview(null); }}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={uploadPhoto}
+                  disabled={!file || uploading}
+                >
+                  {uploading ? "Uploading…" : "Upload photo"}
+                </button>
+              </div>
+
+              {uploadErr && <p className="text-red-300 text-sm mt-2">{uploadErr}</p>}
+              {form?.imageUrl && !preview && (
+                <p className="text-green-300 text-sm mt-2">Photo attached.</p>
+              )}
+            </div>
+
             <div className="field">
               <label className="label">Type</label>
               <select
@@ -322,17 +412,6 @@ function PropertiesPage() {
                 className="input"
                 value={form?.ownerEmail || ""}
                 onChange={e => setForm({ ...form!, ownerEmail: e.target.value })}
-              />
-            </div>
-
-            {/* NEW: Image URL */}
-            <div className="field" style={{ gridColumn: "1/-1" }}>
-              <label className="label">Image URL (optional)</label>
-              <input
-                className="input"
-                value={form?.imageUrl || ""}
-                onChange={e => setForm({ ...form!, imageUrl: e.target.value })}
-                placeholder="https://…/photo.jpg"
               />
             </div>
 

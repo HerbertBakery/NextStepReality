@@ -44,21 +44,24 @@ model Client {
 }
 
 model Property {
-  id           String  @id @default(cuid())
-  addressLine1 String
-  addressLine2 String?
-  city         String
-  province     String?
-  postalCode   String?
-  forType      ForType
-  price        Int?
-  beds         Int?
-  baths        Int?
-  ownerName    String?
-  ownerPhone   String?
-  ownerEmail   String?
-  notes        String? @db.Text
-  archived     Boolean @default(false)
+  id             String  @id @default(cuid())
+  addressLine1   String
+  addressLine2   String?
+  city           String
+  province       String?
+  postalCode     String?
+  forType        ForType
+  price          Int?
+  beds           Int?
+  baths          Int?
+  ownerName      String?
+  ownerPhone     String?
+  ownerEmail     String?
+  notes          String? @db.Text
+  archived       Boolean @default(false)
+
+  // NEW: one photo per listing (public URL after upload)
+  imageUrl       String? @db.Text
 
   // One-to-many to Client (primary client)
   primaryClientId String?

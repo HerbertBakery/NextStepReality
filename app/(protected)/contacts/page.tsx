@@ -118,7 +118,6 @@ function ContactsPage() {
             .toLowerCase()
             .includes(s)
         );
-    // sort by lastName, then firstName
     return list.sort((a, b) => {
       const la = (a.lastName || "").toLowerCase();
       const lb = (b.lastName || "").toLowerCase();
@@ -146,10 +145,10 @@ function ContactsPage() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table (non-sticky header to avoid iOS overlap) */}
       <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900/40 shadow-md">
         <table className="min-w-full border-collapse">
-          <thead className="bg-slate-800/60 sticky top-[calc(env(safe-area-inset-top,0px)+56px)] z-10">
+          <thead className="bg-slate-800/60">
             <tr>
               <th className="px-4 py-3 text-left text-gray-400 font-semibold">Name</th>
               <th className="px-4 py-3 text-left text-gray-400 font-semibold">Email</th>
@@ -165,7 +164,17 @@ function ContactsPage() {
               <tr><td colSpan={5} className="text-center py-6 text-gray-500">No contacts found.</td></tr>
             ) : (
               filteredSorted.map((c, i) => (
-                <tr key={c.id} className={i % 2 === 0 ? "bg-slate-950/40" : "bg-slate-900/40"}>
+                <tr
+                  key={c.id}
+                  className={
+                    (i % 2 === 0 ? "bg-slate-950/40 " : "bg-slate-900/40 ") +
+                    "cursor-pointer hover:bg-indigo-500/10 transition"
+                  }
+                  onClick={() => openEdit(c.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => (e.key === "Enter" || e.key === " ") && openEdit(c.id)}
+                >
                   <td className="px-4 py-3">
                     <div className="font-medium text-white">{c.firstName} {c.lastName}</div>
                   </td>
@@ -177,8 +186,18 @@ function ContactsPage() {
                     )) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right space-x-2">
-                    <button onClick={() => openEdit(c.id)} className="text-indigo-400 hover:text-indigo-300 text-sm font-medium">Edit</button>
-                    <button onClick={() => archive(c.id)} className="text-red-400 hover:text-red-300 text-sm font-medium">Archive</button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openEdit(c.id); }}
+                      className="text-indigo-400 hover:text-indigo-300 text-sm font-medium"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); archive(c.id); }}
+                      className="text-red-400 hover:text-red-300 text-sm font-medium"
+                    >
+                      Archive
+                    </button>
                   </td>
                 </tr>
               ))

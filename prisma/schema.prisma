@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // or: provider = "sqlite", url = "file:./dev.db"
+  url      = env("DATABASE_URL")
+}
+
+enum ForType {
+  SALE
+  RENT
+}
+
+enum RentalStatus {
+  none
+  applied
+  approved
+  declined
+  moved_in
+  moved_out
+}
+
+model Client {
+  id               String       @id @default(cuid())
+  firstName        String
+  lastName         String
+  email            String?      @unique
+  phone            String?
+  birthday         DateTime?
+  budgetMin        Int?
+  budgetMax        Int?
+  lookingFor       String?      @db.Text
+  lastRentalStatus RentalStatus @default(none)
+  lastRentalNotes  String?      @db.Text
+  tags             String?
+  archived         Boolean      @default(false)
+
+  // Back-reference: one client can be the primary client for many properties
+  primaryProperties Property[] @relation("PrimaryClient")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Property {
+  id           String  @id @default(cuid())
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  province     String?
+  postalCode   String?
+  forType      ForType
+  price        Int?
+  beds         Int?
+  baths        Int?
+  ownerName    String?
+  ownerPhone   String?
+  ownerEmail   String?
+  notes        String? @db.Text
+  archived     Boolean @default(false)
+
+  // One-to-many to Client (primary client)
+  primaryClientId String?
+  primaryClient   Client? @relation("PrimaryClient", fields: [primaryClientId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

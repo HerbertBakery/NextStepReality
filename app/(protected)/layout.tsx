@@ -1,9 +1,11 @@
-// app/(protected)/layout.tsx
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-950 text-gray-100 flex flex-col">
-      {/* Sticky app header */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-20">
+      {/* Sticky app header (with safe area top) */}
+      <header
+        className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-20"
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px))" }}
+      >
         <div className="w-full flex items-center justify-between px-4 py-3 sm:px-6">
           <h1 className="text-lg sm:text-xl font-semibold text-indigo-400">Realtor CRM</h1>
           <nav className="flex gap-2">
@@ -24,9 +26,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
       </header>
 
       {/* Full-width content area */}
-      <main className="flex-1 w-full px-4 sm:px-6 py-4 sm:py-6">
-        {children}
-      </main>
+      <main className="flex-1 w-full px-4 sm:px-6 py-4 sm:py-6">{children}</main>
     </div>
   );
 }

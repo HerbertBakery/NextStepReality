@@ -5,7 +5,6 @@ import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Modal from "@/app/components/Modal";
 
-/** ================= Types ================= */
 type Client = {
   id: string;
   firstName: string;
@@ -24,7 +23,6 @@ type Client = {
   updatedAt: string;
 };
 
-/** ================= Wrapper with Suspense ================= */
 export default function ContactsPageWrapper() {
   return (
     <Suspense fallback={<div className="text-gray-400 p-6">Loading…</div>}>
@@ -33,7 +31,6 @@ export default function ContactsPageWrapper() {
   );
 }
 
-/** ================= Actual Page (was default before) ================= */
 function ContactsPage() {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Client[]>([]);
@@ -74,7 +71,8 @@ function ContactsPage() {
     const params = new URLSearchParams(searchParams);
     params.delete("edit");
     params.delete("new");
-    router.replace(params.size ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
+    const url = params.size ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(url, { scroll: false });
     setForm(null);
   };
 
@@ -90,8 +88,7 @@ function ContactsPage() {
         else active && setForm(null);
       } else setForm(null);
     }
-    hydrate();
-    return () => { active = false; };
+    hydrate(); return () => { active = false; };
   }, [editId, isNew, items]);
 
   async function save() {
@@ -112,14 +109,22 @@ function ContactsPage() {
     if (res.ok) load();
   }
 
-  const filtered = useMemo(() => {
+  const filteredSorted = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter(c =>
-      `${c.firstName} ${c.lastName} ${c.email ?? ""} ${c.phone ?? ""} ${c.tags ?? ""}`
-        .toLowerCase()
-        .includes(s)
-    );
+    const list = !s
+      ? [...items]
+      : items.filter(c =>
+          `${c.firstName} ${c.lastName} ${c.email ?? ""} ${c.phone ?? ""} ${c.tags ?? ""}`
+            .toLowerCase()
+            .includes(s)
+        );
+    // sort by lastName, then firstName
+    return list.sort((a, b) => {
+      const la = (a.lastName || "").toLowerCase();
+      const lb = (b.lastName || "").toLowerCase();
+      if (la === lb) return (a.firstName || "").toLowerCase().localeCompare((b.firstName || "").toLowerCase());
+      return la.localeCompare(lb);
+    });
   }, [items, q]);
 
   return (
@@ -141,43 +146,46 @@ function ContactsPage() {
         </div>
       </div>
 
-      {/* Cards (kept as-is; can convert to table later if you want) */}
-      {loading ? (
-        <p className="text-center text-gray-400 py-10">Loading…</p>
-      ) : filtered.length === 0 ? (
-        <p className="text-center text-gray-400 py-10">No contacts found.</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map(c => (
-            <div
-              key={c.id}
-              className="rounded-2xl bg-slate-900 border border-slate-800 p-4 flex flex-col gap-3 shadow-md"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">{c.firstName} {c.lastName}</h3>
-                  <p className="text-sm text-gray-400">{c.email ?? "—"}</p>
-                  <p className="text-sm text-gray-400">{c.phone ?? "—"}</p>
-                </div>
-                <button
-                  onClick={() => openEdit(c.id)}
-                  className="text-indigo-400 hover:text-indigo-300 text-sm font-medium"
-                >
-                  Edit
-                </button>
-              </div>
-
-              {c.tags && (
-                <div className="flex flex-wrap gap-2">
-                  {c.tags.split(",").map(t => <span key={t} className="pill">{t.trim()}</span>)}
-                </div>
-              )}
-
-              <button onClick={() => archive(c.id)} className="btn secondary w-full mt-1">Archive</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Table */}
+      <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900/40 shadow-md">
+        <table className="min-w-full border-collapse">
+          <thead className="bg-slate-800/60 sticky top-[calc(env(safe-area-inset-top,0px)+56px)] z-10">
+            <tr>
+              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Name</th>
+              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Email</th>
+              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Phone</th>
+              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Tags</th>
+              <th className="px-4 py-3 text-right text-gray-400 font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={5} className="text-center py-6 text-gray-500">Loading…</td></tr>
+            ) : filteredSorted.length === 0 ? (
+              <tr><td colSpan={5} className="text-center py-6 text-gray-500">No contacts found.</td></tr>
+            ) : (
+              filteredSorted.map((c, i) => (
+                <tr key={c.id} className={i % 2 === 0 ? "bg-slate-950/40" : "bg-slate-900/40"}>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-white">{c.firstName} {c.lastName}</div>
+                  </td>
+                  <td className="px-4 py-3">{c.email ?? "—"}</td>
+                  <td className="px-4 py-3">{c.phone ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    {c.tags ? c.tags.split(",").map(t => (
+                      <span key={t} className="pill mr-2">{t.trim()}</span>
+                    )) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right space-x-2">
+                    <button onClick={() => openEdit(c.id)} className="text-indigo-400 hover:text-indigo-300 text-sm font-medium">Edit</button>
+                    <button onClick={() => archive(c.id)} className="text-red-400 hover:text-red-300 text-sm font-medium">Archive</button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {(form || editId || isNew) && (
         <Modal

@@ -5,7 +5,6 @@ import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Modal from "@/app/components/Modal";
 
-/** ================ Types ================ */
 type Property = {
   id: string;
   addressLine1: string;
@@ -20,11 +19,12 @@ type Property = {
   ownerName?: string | null;
   ownerPhone?: string | null;
   ownerEmail?: string | null;
+  primaryClientId?: string | null;
   notes?: string | null;
+  imageUrl?: string | null; // NEW: one photo per listing (URL)
   archived: boolean;
 };
 
-/** ================ Wrapper with Suspense ================ */
 export default function PropertiesPageWrapper() {
   return (
     <Suspense fallback={<div className="text-gray-400 p-6">Loading…</div>}>
@@ -33,7 +33,6 @@ export default function PropertiesPageWrapper() {
   );
 }
 
-/** ================ Actual Page (was default before) ================ */
 function PropertiesPage() {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Property[]>([]);
@@ -83,7 +82,7 @@ function PropertiesPage() {
     let active = true;
     async function hydrate() {
       if (isNew) {
-        setForm({ forType: "RENT", city: "", addressLine1: "" } as any);
+        setForm({ addressLine1: "", city: "", forType: "RENT" } as any);
         return;
       }
       if (editId) {
@@ -94,8 +93,7 @@ function PropertiesPage() {
         else active && setForm(null);
       } else setForm(null);
     }
-    hydrate();
-    return () => { active = false; };
+    hydrate(); return () => { active = false; };
   }, [editId, isNew, items]);
 
   async function save() {
@@ -116,12 +114,15 @@ function PropertiesPage() {
     if (res.ok) load();
   }
 
-  const filtered = useMemo(() => {
+  const filteredSorted = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter(p =>
-      `${p.addressLine1} ${p.city} ${p.ownerName ?? ""}`.toLowerCase().includes(s)
-    );
+    const list = !s
+      ? [...items]
+      : items.filter(p =>
+          `${p.addressLine1} ${p.city} ${p.ownerName ?? ""}`.toLowerCase().includes(s)
+        );
+    // sort by addressLine1 alphabetically
+    return list.sort((a, b) => (a.addressLine1 || "").toLowerCase().localeCompare((b.addressLine1 || "").toLowerCase()));
   }, [items, q]);
 
   return (
@@ -143,46 +144,72 @@ function PropertiesPage() {
         </div>
       </div>
 
-      {/* Professional table */}
-      <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900/40 shadow-md">
-        <table className="min-w-full border-collapse">
-          <thead className="bg-slate-800/60 sticky top-0 z-10">
-            <tr>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Address</th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">City</th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Type</th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Price</th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Owner</th>
-              <th className="px-4 py-3 text-right text-gray-400 font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={6} className="text-center py-6 text-gray-500">Loading…</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-6 text-gray-500">No properties found.</td></tr>
-            ) : (
-              filtered.map((p, i) => (
-                <tr key={p.id} className={i % 2 === 0 ? "bg-slate-950/40" : "bg-slate-900/40"}>
-                  <td className="px-4 py-3">{p.addressLine1}</td>
-                  <td className="px-4 py-3">{p.city}</td>
-                  <td className="px-4 py-3 text-gray-300">{p.forType}</td>
-                  <td className="px-4 py-3">{p.price ? `$${p.price.toLocaleString()}` : "—"}</td>
-                  <td className="px-4 py-3">{p.ownerName ?? "—"}</td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <button onClick={() => openEdit(p.id)} className="text-indigo-400 hover:text-indigo-300 text-sm font-medium">Edit</button>
-                    <button onClick={() => archive(p.id)} className="text-red-400 hover:text-red-300 text-sm font-medium">Archive</button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Cards */}
+      {loading ? (
+        <p className="text-center text-gray-400 py-10">Loading…</p>
+      ) : filteredSorted.length === 0 ? (
+        <p className="text-center text-gray-400 py-10">No listings found.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredSorted.map(p => (
+            <div
+              key={p.id}
+              className="rounded-2xl bg-slate-900 border border-slate-800 shadow-md overflow-hidden hover:shadow-indigo-500/10 transition flex flex-col"
+            >
+              {/* Image (optional) */}
+              {p.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={p.imageUrl}
+                  alt={p.addressLine1}
+                  className="w-full h-40 object-cover bg-slate-800"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-40 bg-slate-800 grid place-items-center text-sm text-gray-400">
+                  No Photo
+                </div>
+              )}
+
+              {/* Body */}
+              <div className="p-4 flex-1 flex flex-col gap-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">{p.addressLine1}</h3>
+                    <p className="text-sm text-gray-400">
+                      {p.city}{p.province ? `, ${p.province}` : ""}
+                    </p>
+                    <p className="text-sm text-gray-400">
+                      {p.forType} • {p.price ? `$${p.price.toLocaleString()}` : "—"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => openEdit(p.id)}
+                    className="text-indigo-400 hover:text-indigo-300 text-sm font-medium"
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                {p.ownerName && (
+                  <div className="text-sm text-gray-400">Owner: {p.ownerName}</div>
+                )}
+
+                <button
+                  onClick={() => archive(p.id)}
+                  className="btn secondary w-full mt-auto"
+                >
+                  Archive
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {(form || editId || isNew) && (
         <Modal
-          title={form?.id ? "Edit Property" : "New Property"}
+          title={(form as any)?.id ? "Edit Listing" : "New Listing"}
           onClose={closeModal}
           size="xl"
           footer={
@@ -204,6 +231,7 @@ function PropertiesPage() {
                 <option value="RENT">RENT</option>
               </select>
             </div>
+
             <div className="field">
               <label className="label">Price</label>
               <input
@@ -213,6 +241,7 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, price: e.target.value ? Number(e.target.value) : null })}
               />
             </div>
+
             <div className="field">
               <label className="label">Beds</label>
               <input
@@ -222,6 +251,7 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, beds: e.target.value ? Number(e.target.value) : null })}
               />
             </div>
+
             <div className="field">
               <label className="label">Baths</label>
               <input
@@ -231,6 +261,7 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, baths: e.target.value ? Number(e.target.value) : null })}
               />
             </div>
+
             <div className="field" style={{ gridColumn: "1/-1" }}>
               <label className="label">Address Line 1</label>
               <input
@@ -239,6 +270,7 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, addressLine1: e.target.value })}
               />
             </div>
+
             <div className="field">
               <label className="label">City</label>
               <input
@@ -247,6 +279,7 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, city: e.target.value })}
               />
             </div>
+
             <div className="field">
               <label className="label">Province</label>
               <input
@@ -255,6 +288,7 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, province: e.target.value })}
               />
             </div>
+
             <div className="field">
               <label className="label">Postal Code</label>
               <input
@@ -263,6 +297,7 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, postalCode: e.target.value })}
               />
             </div>
+
             <div className="field">
               <label className="label">Owner Name</label>
               <input
@@ -271,6 +306,7 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, ownerName: e.target.value })}
               />
             </div>
+
             <div className="field">
               <label className="label">Owner Phone</label>
               <input
@@ -279,6 +315,7 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, ownerPhone: e.target.value })}
               />
             </div>
+
             <div className="field">
               <label className="label">Owner Email</label>
               <input
@@ -287,6 +324,18 @@ function PropertiesPage() {
                 onChange={e => setForm({ ...form!, ownerEmail: e.target.value })}
               />
             </div>
+
+            {/* NEW: Image URL */}
+            <div className="field" style={{ gridColumn: "1/-1" }}>
+              <label className="label">Image URL (optional)</label>
+              <input
+                className="input"
+                value={form?.imageUrl || ""}
+                onChange={e => setForm({ ...form!, imageUrl: e.target.value })}
+                placeholder="https://…/photo.jpg"
+              />
+            </div>
+
             <div className="field" style={{ gridColumn: "1/-1" }}>
               <label className="label">Notes</label>
               <textarea

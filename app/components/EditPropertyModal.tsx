@@ -49,7 +49,7 @@ export default function EditPropertyModal({
   }
 
   return (
-    <Modal title="Edit Listing" onClose={onClose} width={760}>
+    <Modal title="Edit Listing" onClose={onClose}>
       {!data ? (
         <p style={{ color: "#9aa3b2" }}>{err || "Loading…"}</p>
       ) : (

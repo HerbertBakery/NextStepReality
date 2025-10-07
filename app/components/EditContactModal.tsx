@@ -57,7 +57,7 @@ export default function EditContactModal({
   }
 
   return (
-    <Modal title="Edit Contact" onClose={onClose} width={720}>
+    <Modal title="Edit Contact" onClose={onClose}>
       {!data ? (
         <p style={{ color: "#9aa3b2" }}>{err || "Loading…"}</p>
       ) : (

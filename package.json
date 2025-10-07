@@ -9,8 +9,8 @@
     "postinstall": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:studio": "prisma studio",
-    "seed:contacts": "tsx seed_contacts.ts",
-    "seed:listings": "tsx seed_listings.ts"
+    "seed:contacts": "tsx prisma/seeds/seed_contacts.ts",
+    "seed:listings": "tsx prisma/seeds/seed_listings.ts"
   },
   "dependencies": {
     "@prisma/client": "5.18.0",

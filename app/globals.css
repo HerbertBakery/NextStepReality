@@ -312,3 +312,15 @@ input, textarea, select {
   border: 1px solid rgba(99, 102, 241, .25);
   font-size: .8rem;
 }
+/* When keyboard is open, reclaim space on mobile */
+@media (max-width: 640px) {
+  .kb-open .pageHeader { margin-bottom: 2px; }
+  .kb-open .pageTitle { font-size: 1.1rem; }
+  .kb-open .btn { padding: 8px 14px; }
+  .kb-open .input { padding: 8px 12px; }
+}
+
+/* Use small viewport units where possible on modern browsers */
+:root {
+  --vh: 100svh; /* fallback var if you need it elsewhere */
+}

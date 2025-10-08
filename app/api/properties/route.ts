@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 /**
  * GET /api/properties?q=search
@@ -13,13 +14,13 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") || "").trim();
 
-  const where = q
+  const where: Prisma.PropertyWhereInput = q
     ? {
         archived: false,
         OR: [
-          { addressLine1: { contains: q, mode: "insensitive" } },
-          { city: { contains: q, mode: "insensitive" } },
-          { ownerName: { contains: q, mode: "insensitive" } },
+          { addressLine1: { contains: q, mode: "insensitive" as const } },
+          { city: { contains: q, mode: "insensitive" as const } },
+          { ownerName: { contains: q, mode: "insensitive" as const } },
         ],
       }
     : { archived: false };
@@ -27,8 +28,7 @@ export async function GET(req: Request) {
   const items = await prisma.property.findMany({
     where,
     orderBy: { addressLine1: "asc" },
-    // If you ever add a select here, make sure to include imageUrl.
-    // select: { id: true, addressLine1: true, city: true, imageUrl: true, ... }
+    // If you ever add select:, include imageUrl there as well.
   });
 
   return NextResponse.json({ items });
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       city: d.city || "",
       province: d.province || null,
       postalCode: d.postalCode || null,
-      forType: d.forType || "RENT", // or enum if defined in Prisma
+      forType: d.forType || "RENT",
       price: d.price ?? null,
       beds: d.beds ?? null,
       baths: d.baths ?? null,
@@ -58,9 +58,7 @@ export async function POST(req: Request) {
       notes: d.notes || null,
       primaryClientId: d.primaryClientId || null,
       archived: false,
-
-      // ✅ persist blob/public URL set on the client after /api/upload
-      imageUrl: d.imageUrl ?? null,
+      imageUrl: d.imageUrl ?? null, // persist uploaded URL
     },
   });
 

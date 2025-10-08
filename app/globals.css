@@ -13,6 +13,9 @@
   --border-soft: #252f48;
   --primary: #6366f1;
   --primary-2: #4f46e5;
+
+  /* Hint OS to prefer dark UI (helps keyboard & form UI pick dark theme) */
+  color-scheme: dark light;
 }
 
 /* ===================== Base Body ===================== */
@@ -22,7 +25,10 @@ html, body {
   font-family: system-ui, -apple-system, "Inter", sans-serif;
   margin: 0;
   padding: 0;
-  min-height: 100vh;
+  /* Use dynamic viewport height for mobile (avoids jump when address bar hides) */
+  min-height: 100dvh;
+  /* Prevent rubber-band/scroll chaining from body on mobile, keep modals/forms in control */
+  overscroll-behavior: none;
 }
 
 /* ===================== Layout & Page ===================== */
@@ -92,6 +98,11 @@ textarea.input {
   font-size: .95rem;
   width: 100%;
   transition: border-color .2s, background .2s;
+}
+
+/* Mobile-native feel: avoid iOS zoom-on-focus by ensuring >=16px */
+input, textarea, select {
+  font-size: 16px;
 }
 
 .input:focus {
@@ -183,13 +194,19 @@ textarea.input {
   background: rgba(8, 12, 22, .65);
   backdrop-filter: blur(10px);
   animation: overlayFade .2s ease;
-  padding: 24px;
+  /* Respect safe areas and allow tighter mobile fit */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: 24px;
+  padding-right: 24px;
 }
 
 .modalPanel {
   width: min(92vw, 860px);
-  max-height: 86vh;
-  overflow-y: auto;
+  /* KEY: cap panel height to dynamic viewport and let inner body scroll */
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  /* Hide overflow here; body section handles its own scroll */
+  overflow: hidden;
   background: #0b1220;
   color: var(--text);
   border: 1px solid var(--border);
@@ -212,6 +229,8 @@ textarea.input {
   border-bottom: 1px solid var(--border-soft);
   background: #0d1423;
   border-radius: 20px 20px 0 0;
+  /* Keep header visible while body scrolls */
+  flex: 0 0 auto;
 }
 
 .modalTitle {
@@ -225,6 +244,11 @@ textarea.input {
   padding: 18px 20px;
   display: grid;
   gap: 14px;
+  /* KEY: scrollable content area with iOS momentum */
+  flex: 1 1 auto;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
 }
 
 .modalFooter {
@@ -235,6 +259,8 @@ textarea.input {
   gap: 10px;
   background: #0d1423;
   border-radius: 0 0 20px 20px;
+  /* Keep footer visible while body scrolls */
+  flex: 0 0 auto;
 }
 
 .modalClose {

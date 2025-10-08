@@ -118,9 +118,18 @@ function ContactsPage() {
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        email: (form?.email ?? "").trim(),
+        phone: (form?.phone ?? "").trim(),
+      }),
     });
-    if (res.ok) { closeModal(); await load(); } else alert("Save failed");
+    if (res.ok) { closeModal(); await load(); }
+    else {
+      const j = await res.json().catch(() => ({}));
+      if (res.status === 409) { alert(j?.error || "Email already exists."); return; }
+      alert(j?.error || "Save failed");
+    }
   }
 
   async function archive(id: string) {
@@ -129,7 +138,7 @@ function ContactsPage() {
     if (res.ok) load();
   }
 
-  // ------- Search across ANY field (string or numeric) -------
+  // ------- Search across ANY field -------
   const filteredSorted = useMemo(() => {
     const raw = q.trim().toLowerCase();
     if (!raw) {
@@ -144,16 +153,11 @@ function ContactsPage() {
         c.lastRentalStatus ?? "none",
       ].map(s => (s ?? "").toString().toLowerCase());
 
-      // include birthday (ISO date) for textual search
       if (c.birthday) pack.push(new Date(c.birthday).toISOString().slice(0, 10));
-
-      // include numeric fields as strings
       if (typeof c.budgetMin === "number") pack.push(String(c.budgetMin));
       if (typeof c.budgetMax === "number") pack.push(String(c.budgetMax));
 
       const hay = pack.join(" ");
-
-      // each token must appear somewhere (AND semantics for stronger relevance)
       return tokens.every(t => hay.includes(t));
     }
 
@@ -167,12 +171,11 @@ function ContactsPage() {
     return la.localeCompare(lb);
   }
 
-  // Helpers for binding date/number fields
   const setField = <K extends keyof Client>(k: K, v: Client[K]) => setForm(prev => ({ ...(prev as any), [k]: v }));
 
   return (
     <div className="space-y-6 w-full">
-      {/* Clean page header (no per-page nav buttons) */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white mt-1">Clients</h1>
@@ -181,6 +184,8 @@ function ContactsPage() {
         <div className="flex gap-2 w-full md:w-auto">
           <input
             className="input flex-1 md:w-96"
+            type="search"
+            enterKeyHint="search"
             placeholder="Search name, email, phone, tags, status, birthday, budget…"
             value={q}
             onChange={e => setQ(e.target.value)}
@@ -211,10 +216,7 @@ function ContactsPage() {
               filteredSorted.map((c, i) => (
                 <tr
                   key={c.id}
-                  className={
-                    (i % 2 === 0 ? "bg-slate-950/40 " : "bg-slate-900/40 ") +
-                    "cursor-pointer hover:bg-indigo-500/10 transition"
-                  }
+                  className={(i % 2 === 0 ? "bg-slate-950/40 " : "bg-slate-900/40 ") + "cursor-pointer hover:bg-indigo-500/10 transition"}
                   onClick={() => openEdit(c.id)}
                   role="button"
                   tabIndex={0}
@@ -253,7 +255,7 @@ function ContactsPage() {
         </table>
       </div>
 
-      {(form || editId || isNew) && (
+      {(form) && (
         <Modal
           title={(form as any)?.id ? "Edit Client" : "New Client"}
           onClose={closeModal}
@@ -270,6 +272,9 @@ function ContactsPage() {
               <label className="label">First Name</label>
               <input
                 className="input"
+                type="text"
+                autoCapitalize="words"
+                enterKeyHint="next"
                 value={form?.firstName || ""}
                 onChange={e => setField("firstName", e.target.value)}
               />
@@ -278,6 +283,9 @@ function ContactsPage() {
               <label className="label">Last Name</label>
               <input
                 className="input"
+                type="text"
+                autoCapitalize="words"
+                enterKeyHint="next"
                 value={form?.lastName || ""}
                 onChange={e => setField("lastName", e.target.value)}
               />
@@ -287,6 +295,10 @@ function ContactsPage() {
               <label className="label">Email</label>
               <input
                 className="input"
+                type="email"
+                autoCapitalize="none"
+                autoComplete="email"
+                enterKeyHint="next"
                 value={form?.email || ""}
                 onChange={e => setField("email", e.target.value)}
               />
@@ -295,6 +307,10 @@ function ContactsPage() {
               <label className="label">Phone</label>
               <input
                 className="input"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                enterKeyHint="done"
                 value={form?.phone || ""}
                 onChange={e => setField("phone", e.target.value)}
               />
@@ -305,6 +321,7 @@ function ContactsPage() {
               <input
                 type="date"
                 className="input"
+                enterKeyHint="done"
                 value={form?.birthday ? toDateInputValue(form.birthday) : ""}
                 onChange={e => setField("birthday", e.target.value ? e.target.value : "")}
               />
@@ -328,8 +345,11 @@ function ContactsPage() {
             <div className="field">
               <label className="label">Budget Min</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="input"
+                enterKeyHint="done"
                 value={form?.budgetMin ?? ""}
                 onChange={e => setField("budgetMin", e.target.value === "" ? null : Number(e.target.value))}
               />
@@ -337,8 +357,11 @@ function ContactsPage() {
             <div className="field">
               <label className="label">Budget Max</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="input"
+                enterKeyHint="done"
                 value={form?.budgetMax ?? ""}
                 onChange={e => setField("budgetMax", e.target.value === "" ? null : Number(e.target.value))}
               />
@@ -348,6 +371,8 @@ function ContactsPage() {
               <label className="label">Tags (comma separated)</label>
               <input
                 className="input"
+                type="text"
+                enterKeyHint="done"
                 value={form?.tags || ""}
                 onChange={e => setField("tags", e.target.value)}
               />
@@ -357,6 +382,8 @@ function ContactsPage() {
               <label className="label">Looking For</label>
               <input
                 className="input"
+                type="text"
+                enterKeyHint="done"
                 value={form?.lookingFor || ""}
                 onChange={e => setField("lookingFor", e.target.value)}
               />
@@ -378,7 +405,6 @@ function ContactsPage() {
   );
 }
 
-// Convert ISO/string to yyyy-MM-dd for <input type="date">
 function toDateInputValue(v?: string | null) {
   if (!v) return "";
   const d = new Date(v);

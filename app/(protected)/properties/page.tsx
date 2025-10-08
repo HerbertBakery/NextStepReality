@@ -39,7 +39,6 @@ function PropertiesPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Partial<Property> | null>(null);
 
-  // upload UI state
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -124,7 +123,7 @@ function PropertiesPage() {
     if (res.ok) load();
   }
 
-  // ======== Client-side search across any field ========
+  // Client-side search across any field
   const filteredSorted = useMemo(() => {
     const raw = q.trim().toLowerCase();
     if (!raw) {
@@ -139,7 +138,6 @@ function PropertiesPage() {
     }
 
     function matches(p: Property) {
-      // Build a searchable haystack with rich aliases
       const parts: string[] = [
         p.addressLine1,
         p.addressLine2 ?? "",
@@ -148,14 +146,12 @@ function PropertiesPage() {
         p.ownerEmail ?? "",
         p.ownerPhone ?? "",
         p.notes ?? "",
-        p.forType, // "RENT" | "SALE"
+        p.forType,
       ].map(norm);
 
-      // Human-friendly keywords for forType
       if (p.forType === "RENT") parts.push("rent", "rental", "for rent");
       if (p.forType === "SALE") parts.push("sale", "for sale", "buy", "purchase");
 
-      // Numeric fields as strings
       if (typeof p.price === "number") parts.push(String(p.price));
       if (typeof p.beds === "number") parts.push(String(p.beds), `${p.beds} bed`, `${p.beds} beds`);
       if (typeof p.baths === "number") parts.push(String(p.baths), `${p.baths} bath`, `${p.baths} baths`);
@@ -169,7 +165,7 @@ function PropertiesPage() {
     );
   }, [items, q]);
 
-  // ======== Upload handling ========
+  // Upload handling
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] || null;
     setFile(f);
@@ -203,7 +199,7 @@ function PropertiesPage() {
 
   return (
     <div className="space-y-6 w-full">
-      {/* Clean page header (no per-page nav buttons; no 'Inventory') */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white mt-1">Properties</h1>
@@ -212,6 +208,8 @@ function PropertiesPage() {
         <div className="flex gap-2 w-full md:w-auto">
           <input
             className="input flex-1 md:w-96"
+            type="search"
+            enterKeyHint="search"
             placeholder="Search rent/sale, price, beds, baths, address, owner…"
             value={q}
             onChange={e => setQ(e.target.value)}
@@ -236,7 +234,6 @@ function PropertiesPage() {
               tabIndex={0}
               onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openEdit(p.id)}
             >
-              {/* Image */}
               {p.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -251,14 +248,11 @@ function PropertiesPage() {
                 </div>
               )}
 
-              {/* Body */}
               <div className="p-4 flex-1 flex flex-col gap-2">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-lg font-semibold text-white">{p.addressLine1}</h3>
-                    {p.addressLine2 ? (
-                      <p className="text-sm text-gray-400">{p.addressLine2}</p>
-                    ) : null}
+                    {p.addressLine2 ? <p className="text-sm text-gray-400">{p.addressLine2}</p> : null}
                     <p className="text-sm text-gray-400">{p.city}</p>
                     <p className="text-sm text-gray-300 font-medium">
                       <span className="uppercase">{p.forType}</span>{" "}
@@ -267,7 +261,6 @@ function PropertiesPage() {
                       • {typeof p.baths === "number" ? `${p.baths} ba` : "—"}
                     </p>
                   </div>
-                  {/* Removed Edit button — card is clickable */}
                 </div>
 
                 {p.ownerName && (
@@ -293,7 +286,7 @@ function PropertiesPage() {
         </div>
       )}
 
-      {(form || editId || isNew) && (
+      {(form) && (
         <Modal
           title={(form as any)?.id ? "Edit Property" : "New Property"}
           onClose={closeModal}
@@ -368,8 +361,11 @@ function PropertiesPage() {
             <div className="field">
               <label className="label">Price</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="input"
+                enterKeyHint="done"
                 value={form?.price ?? ""}
                 onChange={e => setForm({ ...form!, price: e.target.value ? Number(e.target.value) : null })}
               />
@@ -378,8 +374,11 @@ function PropertiesPage() {
             <div className="field">
               <label className="label">Beds</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="input"
+                enterKeyHint="done"
                 value={form?.beds ?? ""}
                 onChange={e => setForm({ ...form!, beds: e.target.value ? Number(e.target.value) : null })}
               />
@@ -388,8 +387,11 @@ function PropertiesPage() {
             <div className="field">
               <label className="label">Baths</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 className="input"
+                enterKeyHint="done"
                 value={form?.baths ?? ""}
                 onChange={e => setForm({ ...form!, baths: e.target.value ? Number(e.target.value) : null })}
               />
@@ -399,6 +401,8 @@ function PropertiesPage() {
               <label className="label">Address Line 1</label>
               <input
                 className="input"
+                type="text"
+                enterKeyHint="next"
                 value={form?.addressLine1 || ""}
                 onChange={e => setForm({ ...form!, addressLine1: e.target.value })}
               />
@@ -408,6 +412,8 @@ function PropertiesPage() {
               <label className="label">Address Line 2</label>
               <input
                 className="input"
+                type="text"
+                enterKeyHint="next"
                 value={form?.addressLine2 || ""}
                 onChange={e => setForm({ ...form!, addressLine2: e.target.value })}
               />
@@ -417,6 +423,8 @@ function PropertiesPage() {
               <label className="label">City</label>
               <input
                 className="input"
+                type="text"
+                enterKeyHint="next"
                 value={form?.city || ""}
                 onChange={e => setForm({ ...form!, city: e.target.value })}
               />
@@ -426,6 +434,9 @@ function PropertiesPage() {
               <label className="label">Owner Name</label>
               <input
                 className="input"
+                type="text"
+                autoCapitalize="words"
+                enterKeyHint="next"
                 value={form?.ownerName || ""}
                 onChange={e => setForm({ ...form!, ownerName: e.target.value })}
               />
@@ -435,6 +446,10 @@ function PropertiesPage() {
               <label className="label">Owner Phone</label>
               <input
                 className="input"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                enterKeyHint="done"
                 value={form?.ownerPhone || ""}
                 onChange={e => setForm({ ...form!, ownerPhone: e.target.value })}
               />
@@ -444,6 +459,10 @@ function PropertiesPage() {
               <label className="label">Owner Email</label>
               <input
                 className="input"
+                type="email"
+                autoCapitalize="none"
+                autoComplete="email"
+                enterKeyHint="done"
                 value={form?.ownerEmail || ""}
                 onChange={e => setForm({ ...form!, ownerEmail: e.target.value })}
               />

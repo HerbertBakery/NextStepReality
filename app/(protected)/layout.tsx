@@ -2,11 +2,15 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { useKeyboardPadding } from "@/app/hooks/useKeyboardPadding";
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isContacts = pathname.startsWith("/contacts");
   const isProperties = pathname.startsWith("/properties");
+
+  // Adds bottom padding when the mobile keyboard is open so buttons/fields aren’t hidden
+  useKeyboardPadding("main");
 
   return (
     <div className="min-h-screen bg-slate-950 text-gray-100 flex flex-col">

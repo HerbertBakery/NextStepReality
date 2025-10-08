@@ -1,18 +1,18 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState, useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Modal from "@/app/components/Modal";
+
+type ForType = "SALE" | "RENT";
 
 type Property = {
   id: string;
   addressLine1: string;
   addressLine2?: string | null;
   city: string;
-  province?: string | null;
-  postalCode?: string | null;
-  forType: "SALE" | "RENT";
+  forType: ForType;
   price?: number | null;
   beds?: number | null;
   baths?: number | null;
@@ -21,7 +21,7 @@ type Property = {
   ownerEmail?: string | null;
   primaryClientId?: string | null;
   notes?: string | null;
-  imageUrl?: string | null; // photo URL after upload
+  imageUrl?: string | null;
   archived: boolean;
 };
 
@@ -124,14 +124,47 @@ function PropertiesPage() {
     if (res.ok) load();
   }
 
+  // ======== Client-side search across any field ========
   const filteredSorted = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    const list = !s
-      ? [...items]
-      : items.filter(p =>
-          `${p.addressLine1} ${p.city} ${p.ownerName ?? ""}`.toLowerCase().includes(s)
-        );
-    return list.sort((a, b) =>
+    const raw = q.trim().toLowerCase();
+    if (!raw) {
+      return [...items].sort((a, b) =>
+        (a.addressLine1 || "").toLowerCase().localeCompare((b.addressLine1 || "").toLowerCase())
+      );
+    }
+    const tokens = raw.split(/\s+/).filter(Boolean);
+
+    function norm(v: any) {
+      return (v ?? "").toString().toLowerCase();
+    }
+
+    function matches(p: Property) {
+      // Build a searchable haystack with rich aliases
+      const parts: string[] = [
+        p.addressLine1,
+        p.addressLine2 ?? "",
+        p.city,
+        p.ownerName ?? "",
+        p.ownerEmail ?? "",
+        p.ownerPhone ?? "",
+        p.notes ?? "",
+        p.forType, // "RENT" | "SALE"
+      ].map(norm);
+
+      // Human-friendly keywords for forType
+      if (p.forType === "RENT") parts.push("rent", "rental", "for rent");
+      if (p.forType === "SALE") parts.push("sale", "for sale", "buy", "purchase");
+
+      // Numeric fields as strings
+      if (typeof p.price === "number") parts.push(String(p.price));
+      if (typeof p.beds === "number") parts.push(String(p.beds), `${p.beds} bed`, `${p.beds} beds`);
+      if (typeof p.baths === "number") parts.push(String(p.baths), `${p.baths} bath`, `${p.baths} baths`);
+
+      const hay = parts.join(" ");
+      return tokens.every(t => hay.includes(t));
+    }
+
+    return items.filter(matches).sort((a, b) =>
       (a.addressLine1 || "").toLowerCase().localeCompare((b.addressLine1 || "").toLowerCase())
     );
   }, [items, q]);
@@ -170,16 +203,16 @@ function PropertiesPage() {
 
   return (
     <div className="space-y-6 w-full">
-      {/* Header row */}
+      {/* Clean page header (no per-page nav buttons; no 'Inventory') */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
         <div>
-          <div className="pill">Inventory</div>
-          <h1 className="text-2xl font-bold text-white mt-1">Listings</h1>
+          <h1 className="text-2xl font-bold text-white mt-1">Properties</h1>
+          <p className="text-sm text-gray-400">Browse and manage property listings.</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           <input
             className="input flex-1 md:w-96"
-            placeholder="Search address, city…"
+            placeholder="Search rent/sale, price, beds, baths, address, owner…"
             value={q}
             onChange={e => setQ(e.target.value)}
           />
@@ -191,13 +224,17 @@ function PropertiesPage() {
       {loading ? (
         <p className="text-center text-gray-400 py-10">Loading…</p>
       ) : filteredSorted.length === 0 ? (
-        <p className="text-center text-gray-400 py-10">No listings found.</p>
+        <p className="text-center text-gray-400 py-10">No properties found.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredSorted.map(p => (
             <div
               key={p.id}
-              className="rounded-2xl bg-slate-900 border border-slate-800 shadow-md overflow-hidden hover:shadow-indigo-500/10 transition flex flex-col"
+              className="rounded-2xl bg-slate-900 border border-slate-800 shadow-md overflow-hidden hover:shadow-indigo-500/10 transition flex flex-col cursor-pointer"
+              onClick={() => openEdit(p.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openEdit(p.id)}
             >
               {/* Image */}
               {p.imageUrl ? (
@@ -219,31 +256,37 @@ function PropertiesPage() {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-lg font-semibold text-white">{p.addressLine1}</h3>
-                    <p className="text-sm text-gray-400">
-                      {p.city}{p.province ? `, ${p.province}` : ""}
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      {p.forType} • {p.price ? `$${p.price.toLocaleString()}` : "—"}
+                    {p.addressLine2 ? (
+                      <p className="text-sm text-gray-400">{p.addressLine2}</p>
+                    ) : null}
+                    <p className="text-sm text-gray-400">{p.city}</p>
+                    <p className="text-sm text-gray-300 font-medium">
+                      <span className="uppercase">{p.forType}</span>{" "}
+                      • {typeof p.price === "number" ? `$${p.price.toLocaleString()}` : "—"}{" "}
+                      • {typeof p.beds === "number" ? `${p.beds} bd` : "—"}{" "}
+                      • {typeof p.baths === "number" ? `${p.baths} ba` : "—"}
                     </p>
                   </div>
-                  <button
-                    onClick={() => openEdit(p.id)}
-                    className="text-indigo-400 hover:text-indigo-300 text-sm font-medium"
-                  >
-                    Edit
-                  </button>
+                  {/* Removed Edit button — card is clickable */}
                 </div>
 
                 {p.ownerName && (
                   <div className="text-sm text-gray-400">Owner: {p.ownerName}</div>
                 )}
+                {(p.ownerPhone || p.ownerEmail) && (
+                  <div className="text-xs text-gray-500">
+                    {p.ownerPhone ? `☎ ${p.ownerPhone}` : ""} {p.ownerEmail ? ` • ✉ ${p.ownerEmail}` : ""}
+                  </div>
+                )}
 
-                <button
-                  onClick={() => archive(p.id)}
-                  className="btn secondary w-full mt-auto"
-                >
-                  Archive
-                </button>
+                <div className="mt-auto flex justify-end">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); archive(p.id); }}
+                    className="btn secondary"
+                  >
+                    Archive
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -252,7 +295,7 @@ function PropertiesPage() {
 
       {(form || editId || isNew) && (
         <Modal
-          title={(form as any)?.id ? "Edit Listing" : "New Listing"}
+          title={(form as any)?.id ? "Edit Property" : "New Property"}
           onClose={closeModal}
           size="xl"
           footer={
@@ -269,7 +312,7 @@ function PropertiesPage() {
             <div className="field" style={{ gridColumn: "1/-1" }}>
               <label className="label">Photo</label>
 
-              {preview || form?.imageUrl ? (
+              {(preview || form?.imageUrl) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={preview || (form?.imageUrl as string)}
@@ -315,7 +358,7 @@ function PropertiesPage() {
               <select
                 className="input"
                 value={form?.forType || "RENT"}
-                onChange={e => setForm({ ...form!, forType: e.target.value as any })}
+                onChange={e => setForm({ ...form!, forType: e.target.value as ForType })}
               >
                 <option value="SALE">SALE</option>
                 <option value="RENT">RENT</option>
@@ -362,29 +405,20 @@ function PropertiesPage() {
             </div>
 
             <div className="field">
+              <label className="label">Address Line 2</label>
+              <input
+                className="input"
+                value={form?.addressLine2 || ""}
+                onChange={e => setForm({ ...form!, addressLine2: e.target.value })}
+              />
+            </div>
+
+            <div className="field">
               <label className="label">City</label>
               <input
                 className="input"
                 value={form?.city || ""}
                 onChange={e => setForm({ ...form!, city: e.target.value })}
-              />
-            </div>
-
-            <div className="field">
-              <label className="label">Province</label>
-              <input
-                className="input"
-                value={form?.province || ""}
-                onChange={e => setForm({ ...form!, province: e.target.value })}
-              />
-            </div>
-
-            <div className="field">
-              <label className="label">Postal Code</label>
-              <input
-                className="input"
-                value={form?.postalCode || ""}
-                onChange={e => setForm({ ...form!, postalCode: e.target.value })}
               />
             </div>
 

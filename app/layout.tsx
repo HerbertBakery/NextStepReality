@@ -1,19 +1,19 @@
+// app/layout.tsx
 import "./globals.css";
+import type { Metadata, Viewport } from "next";
 
-export const metadata = {
-  title: "Realtor CRM",
-  description: "Contacts & Listings",
-  // themeColor moved to `viewport` to satisfy Next.js warning
+export const metadata: Metadata = {
+  title: "Next Step Reality",
+  description: "Clients & Properties CRM",
   icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Realtor CRM",
+    title: "Next Step Reality",
   },
 };
 
-// Move themeColor + viewport-fit to `viewport` export (App Router API)
-export const viewport = {
+export const viewport: Viewport = {
   themeColor: "#0a0f1c",
   width: "device-width",
   initialScale: 1,
@@ -23,14 +23,9 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1, viewport-fit=cover"
-        />
-      </head>
       <body className="bg-slate-950 text-gray-100 min-h-screen">
-        {children}
+        {/* All page headers handled by ProtectedLayout */}
+        <main>{children}</main>
       </body>
     </html>
   );

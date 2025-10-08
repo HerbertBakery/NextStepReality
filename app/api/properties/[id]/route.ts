@@ -5,18 +5,20 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+const baseSelect = {
+  id: true, addressLine1: true, addressLine2: true, city: true,
+  forType: true, price: true, beds: true, baths: true,
+  ownerName: true, ownerPhone: true, ownerEmail: true,
+  notes: true, archived: true, imageUrl: true,
+  primaryClientId: true, createdAt: true, updatedAt: true,
+};
+
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const one = await prisma.property.findUnique({
     where: { id: params.id },
-    select: {
-      id: true, addressLine1: true, addressLine2: true, city: true,
-      forType: true, price: true, beds: true, baths: true,
-      ownerName: true, ownerPhone: true, ownerEmail: true,
-      notes: true, archived: true, imageUrl: true,
-      primaryClientId: true, createdAt: true, updatedAt: true,
-    },
+    select: baseSelect,
   });
-  if (!one) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!one || one.archived) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(one);
 }
 
@@ -39,13 +41,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       primaryClientId: d.primaryClientId || null,
       imageUrl: d.imageUrl ?? null,
     },
-    select: {
-      id: true, addressLine1: true, addressLine2: true, city: true,
-      forType: true, price: true, beds: true, baths: true,
-      ownerName: true, ownerPhone: true, ownerEmail: true,
-      notes: true, archived: true, imageUrl: true,
-      primaryClientId: true, createdAt: true, updatedAt: true,
-    },
+    select: baseSelect,
   });
   return NextResponse.json(updated);
 }

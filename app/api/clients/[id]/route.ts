@@ -1,8 +1,18 @@
-import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+// app/api/clients/[id]/route.ts
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function PUT(_req: Request, { params }: { params: { id: string } }) {
-  const data = await _req.json();
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const one = await prisma.client.findUnique({ where: { id: params.id } });
+  if (!one || one.archived) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json(one);
+}
+
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
+  const data = await req.json();
   const updated = await prisma.client.update({
     where: { id: params.id },
     data: {
@@ -17,7 +27,7 @@ export async function PUT(_req: Request, { params }: { params: { id: string } })
       lastRentalStatus: data.lastRentalStatus || "none",
       lastRentalNotes: data.lastRentalNotes || null,
       tags: data.tags || null,
-    }
+    },
   });
   return NextResponse.json(updated);
 }

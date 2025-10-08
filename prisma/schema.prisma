@@ -1,9 +1,10 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql" // or: provider = "sqlite", url = "file:./dev.db"
+  provider = "postgresql" // or "sqlite" with url = "file:./dev.db"
   url      = env("DATABASE_URL")
 }
 
@@ -36,7 +37,7 @@ model Client {
   tags             String?
   archived         Boolean      @default(false)
 
-  // Back-reference: one client can be the primary client for many properties
+  // Back-reference
   primaryProperties Property[] @relation("PrimaryClient")
 
   createdAt DateTime @default(now())
@@ -44,28 +45,26 @@ model Client {
 }
 
 model Property {
-  id             String  @id @default(cuid())
-  addressLine1   String
-  addressLine2   String?
-  city           String
-  province       String?
-  postalCode     String?
-  forType        ForType
-  price          Int?
-  beds           Int?
-  baths          Int?
-  ownerName      String?
-  ownerPhone     String?
-  ownerEmail     String?
-  notes          String? @db.Text
-  archived       Boolean @default(false)
-
-  // NEW: one photo per listing (public URL after upload)
-  imageUrl       String? @db.Text
+  id               String   @id @default(cuid())
+  addressLine1     String
+  addressLine2     String?
+  city             String
+  // province       String?   // ❌ removed for T&T
+  // postalCode     String?   // ❌ removed for T&T
+  forType          ForType
+  price            Int?
+  beds             Int?
+  baths            Int?
+  ownerName        String?
+  ownerPhone       String?
+  ownerEmail       String?
+  notes            String?  @db.Text
+  archived         Boolean  @default(false)
+  imageUrl         String?  @db.Text
 
   // One-to-many to Client (primary client)
-  primaryClientId String?
-  primaryClient   Client? @relation("PrimaryClient", fields: [primaryClientId], references: [id])
+  primaryClientId  String?
+  primaryClient    Client?  @relation("PrimaryClient", fields: [primaryClientId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

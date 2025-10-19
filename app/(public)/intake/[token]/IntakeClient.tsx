@@ -1,4 +1,4 @@
-// app/(public)/intake/[token]/page.tsx
+// app/(public)/intake/[token]/IntakeClient.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -20,9 +20,7 @@ type Client = {
   agentOnJob: string | null;
 };
 
-export default function IntakePage({ params }: { params: { token: string } }) {
-  const token = params.token;
-
+export default function IntakeClient({ token }: { token: string }) {
   const [data, setData] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -71,11 +69,11 @@ export default function IntakePage({ params }: { params: { token: string } }) {
         phone: (data.phone ?? "") || null,
         tags: (data.tags ?? "") || "",
         budgetMin:
-          data.budgetMin === null || data.budgetMin === ("" as any)
+          data.budgetMin === null || (data.budgetMin as any) === ""
             ? null
             : Number.isFinite(Number(data.budgetMin)) ? Number(data.budgetMin) : null,
         budgetMax:
-          data.budgetMax === null || data.budgetMax === ("" as any)
+          data.budgetMax === null || (data.budgetMax as any) === ""
             ? null
             : Number.isFinite(Number(data.budgetMax)) ? Number(data.budgetMax) : null,
         birthday: data.birthday ? new Date(data.birthday).toISOString() : null,

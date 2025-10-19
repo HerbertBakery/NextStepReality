@@ -1,7 +1,7 @@
+// app/(protected)/contacts/page.tsx
 "use client";
-export const dynamic = "force-dynamic";
 
-import { Suspense, useEffect, useMemo, useState, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Modal from "@/app/components/Modal";
 
@@ -20,6 +20,7 @@ type Client = {
   lastRentalStatus: RentalStatus;
   lastRentalNotes?: string | null;
   tags?: string | null;
+  agentOnJob?: string | null;
   archived: boolean;
   createdAt: string;
   updatedAt: string;
@@ -38,6 +39,7 @@ function ContactsPage() {
   const [items, setItems] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Partial<Client> | null>(null);
+  const [selected, setSelected] = useState<Record<string, boolean>>({}); // NEW
 
   const router = useRouter();
   const pathname = usePathname();
@@ -47,10 +49,11 @@ function ContactsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/clients?q=${encodeURIComponent(q)}`);
+    const res = await fetch(`/api/clients?q=${encodeURIComponent(q)}`, { cache: "no-store" });
     const j = await res.json();
     setItems(j.items || []);
     setLoading(false);
+    setSelected({}); // clear selection when list changes
   }, [q]);
 
   useEffect(() => { load(); }, [load]);
@@ -94,13 +97,14 @@ function ContactsPage() {
           tags: "",
           lookingFor: "",
           lastRentalNotes: "",
+          agentOnJob: "",
         } as Partial<Client>);
         return;
       }
       if (editId) {
         const fromList = items.find(i => i.id === editId);
         if (fromList) { active && setForm(fromList); return; }
-        const r = await fetch(`/api/clients/${editId}`);
+        const r = await fetch(`/api/clients/${editId}`, { cache: "no-store" });
         if (r.ok) { const one = await r.json(); active && setForm(one); }
         else active && setForm(null);
       } else {
@@ -115,14 +119,17 @@ function ContactsPage() {
     if (!form) return;
     const method = (form as any).id ? "PUT" : "POST";
     const url = (form as any).id ? `/api/clients/${(form as any).id}` : `/api/clients`;
+    const payload = {
+      ...form,
+      email: (form?.email ?? "").toString().trim() || null,
+      phone: (form?.phone ?? "").toString().trim() || null,
+      tags: (form?.tags ?? "").toString(),
+      agentOnJob: (form?.agentOnJob ?? "").toString() || null,
+    };
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        email: (form?.email ?? "").trim(),
-        phone: (form?.phone ?? "").trim(),
-      }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) { closeModal(); await load(); }
     else {
@@ -138,6 +145,37 @@ function ContactsPage() {
     if (res.ok) load();
   }
 
+  // Selection helpers (NEW)
+  const toggleSelect = (id: string, checked: boolean) =>
+    setSelected(prev => ({ ...prev, [id]: checked }));
+  const allVisibleIds = useMemo(() => items.map(i => i.id), [items]);
+  const anySelected = useMemo(() => Object.values(selected).some(Boolean), [selected]);
+  const selectedEmails = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach(i => {
+      const useIt = anySelected ? !!selected[i.id] : true;
+      if (useIt && i.email) set.add(i.email);
+    });
+    return Array.from(set);
+  }, [items, selected, anySelected]);
+
+  async function copyEmails() {
+    if (selectedEmails.length === 0) { alert("No emails to copy."); return; }
+    const text = selectedEmails.join(", ");
+    try {
+      await navigator.clipboard.writeText(text);
+      alert(`Copied ${selectedEmails.length} email(s) to clipboard.`);
+    } catch {
+      prompt("Copy these emails:", text);
+    }
+  }
+  function emailAll() {
+    if (selectedEmails.length === 0) { alert("No emails to email."); return; }
+    const bcc = encodeURIComponent(selectedEmails.join(","));
+    // empty "to" plus BCC = better privacy
+    window.location.href = `mailto:?bcc=${bcc}`;
+  }
+
   // ------- Search across ANY field -------
   const filteredSorted = useMemo(() => {
     const raw = q.trim().toLowerCase();
@@ -150,6 +188,7 @@ function ContactsPage() {
       const pack: string[] = [
         c.firstName, c.lastName, c.email ?? "", c.phone ?? "",
         c.tags ?? "", c.lookingFor ?? "", c.lastRentalNotes ?? "",
+        c.agentOnJob ?? "",
         c.lastRentalStatus ?? "none",
       ].map(s => (s ?? "").toString().toLowerCase());
 
@@ -173,6 +212,15 @@ function ContactsPage() {
 
   const setField = <K extends keyof Client>(k: K, v: Client[K]) => setForm(prev => ({ ...(prev as any), [k]: v }));
 
+  // master checkbox state
+  const allSelectedOnPage = filteredSorted.length > 0 && filteredSorted.every(c => selected[c.id]);
+  const someSelectedOnPage = filteredSorted.some(c => selected[c.id]) && !allSelectedOnPage;
+  const toggleAllOnPage = (checked: boolean) => {
+    const updates: Record<string, boolean> = {};
+    filteredSorted.forEach(c => { updates[c.id] = checked; });
+    setSelected(prev => ({ ...prev, ...updates }));
+  };
+
   return (
     <div className="space-y-6 w-full">
       {/* Header */}
@@ -190,6 +238,13 @@ function ContactsPage() {
             value={q}
             onChange={e => setQ(e.target.value)}
           />
+          <a href="/api/clients/export" className="btn whitespace-nowrap">Export Emails (CSV)</a>
+          <button className="btn secondary whitespace-nowrap" onClick={copyEmails}>
+            {anySelected ? "Copy Selected Emails" : "Copy All Emails"}
+          </button>
+          <button className="btn whitespace-nowrap" onClick={emailAll}>
+            {anySelected ? "Email Selected" : "Email All"}
+          </button>
           <button className="btn" onClick={openCreate}>Add</button>
         </div>
       </div>
@@ -199,19 +254,29 @@ function ContactsPage() {
         <table className="min-w-full border-collapse">
           <thead className="bg-slate-800/60">
             <tr>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Name</th>
+              <th className="px-3 py-3 text-left text-gray-400 font-semibold w-10">
+                <input
+                  aria-label="Select all"
+                  type="checkbox"
+                  checked={allSelectedOnPage}
+                  ref={el => { if (el) el.indeterminate = someSelectedOnPage; }}
+                  onChange={(e) => toggleAllOnPage(e.currentTarget.checked)}
+                />
+              </th>
+              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Name / Tags</th>
               <th className="px-4 py-3 text-left text-gray-400 font-semibold">Email</th>
               <th className="px-4 py-3 text-left text-gray-400 font-semibold">Phone</th>
               <th className="px-4 py-3 text-left text-gray-400 font-semibold">Status</th>
               <th className="px-4 py-3 text-left text-gray-400 font-semibold">Budget</th>
+              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Agent on job</th>
               <th className="px-4 py-3 text-right text-gray-400 font-semibold">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="text-center py-6 text-gray-500">Loading…</td></tr>
+              <tr><td colSpan={8} className="text-center py-6 text-gray-500">Loading…</td></tr>
             ) : filteredSorted.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-6 text-gray-500">No clients found.</td></tr>
+              <tr><td colSpan={8} className="text-center py-6 text-gray-500">No clients found.</td></tr>
             ) : (
               filteredSorted.map((c, i) => (
                 <tr
@@ -222,12 +287,20 @@ function ContactsPage() {
                   tabIndex={0}
                   onKeyDown={e => (e.key === "Enter" || e.key === " ") && openEdit(c.id)}
                 >
+                  <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      aria-label={`Select ${c.firstName} ${c.lastName}`}
+                      type="checkbox"
+                      checked={!!selected[c.id]}
+                      onChange={(e) => toggleSelect(c.id, e.currentTarget.checked)}
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-white">{c.firstName} {c.lastName}</div>
                     {c.tags && (
                       <div className="mt-1">
-                        {c.tags.split(",").map(t => (
-                          <span key={t} className="pill mr-2">{t.trim()}</span>
+                        {c.tags.split(",").map((t, idx) => (
+                          <span key={`${t}-${idx}`} className="pill mr-2">{t.trim()}</span>
                         ))}
                       </div>
                     )}
@@ -240,6 +313,7 @@ function ContactsPage() {
                       ? `${c.budgetMin ?? "—"} – ${c.budgetMax ?? "—"}`
                       : "—"}
                   </td>
+                  <td className="px-4 py-3">{c.agentOnJob || "—"}</td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={(e) => { e.stopPropagation(); archive(c.id); }}
@@ -342,28 +416,44 @@ function ContactsPage() {
               </select>
             </div>
 
+            {/* Safer numeric inputs — avoid NaN */}
             <div className="field">
               <label className="label">Budget Min</label>
               <input
-                type="text"
+                type="number"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 className="input"
                 enterKeyHint="done"
                 value={form?.budgetMin ?? ""}
-                onChange={e => setField("budgetMin", e.target.value === "" ? null : Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.currentTarget.value.trim();
+                  setField("budgetMin", val === "" ? null : Number.isFinite(Number(val)) ? Number(val) : (form?.budgetMin ?? null));
+                }}
               />
             </div>
             <div className="field">
               <label className="label">Budget Max</label>
               <input
-                type="text"
+                type="number"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 className="input"
                 enterKeyHint="done"
                 value={form?.budgetMax ?? ""}
-                onChange={e => setField("budgetMax", e.target.value === "" ? null : Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.currentTarget.value.trim();
+                  setField("budgetMax", val === "" ? null : Number.isFinite(Number(val)) ? Number(val) : (form?.budgetMax ?? null));
+                }}
+              />
+            </div>
+
+            <div className="field" style={{ gridColumn: "1/-1" }}>
+              <label className="label">Agent on job</label>
+              <input
+                className="input"
+                type="text"
+                enterKeyHint="next"
+                value={form?.agentOnJob || ""}
+                onChange={e => setField("agentOnJob", e.target.value)}
               />
             </div>
 

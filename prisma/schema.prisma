@@ -37,11 +37,15 @@ model Client {
   tags             String?
   archived         Boolean      @default(false)
 
-  // Back-reference
-  primaryProperties Property[] @relation("PrimaryClient")
+  // NEW
+  agentOnJob       String?
+  intakeToken      String?      @unique
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Back-reference (Property.primaryClient)
+  primaryProperties Property[]  @relation("PrimaryClient")
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
 
 model Property {
@@ -49,8 +53,8 @@ model Property {
   addressLine1     String
   addressLine2     String?
   city             String
-  // province       String?   // ❌ removed for T&T
-  // postalCode     String?   // ❌ removed for T&T
+  // province       String?   // intentionally removed in your current setup
+  // postalCode     String?   // intentionally removed in your current setup
   forType          ForType
   price            Int?
   beds             Int?
@@ -62,10 +66,13 @@ model Property {
   archived         Boolean  @default(false)
   imageUrl         String?  @db.Text
 
-  // One-to-many to Client (primary client)
+  // NEW
+  tags             String[] @default([])
+
+  // Optional link to a primary client
   primaryClientId  String?
   primaryClient    Client?  @relation("PrimaryClient", fields: [primaryClientId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }

@@ -1,7 +1,7 @@
+// app/(protected)/properties/page.tsx
 "use client";
-export const dynamic = "force-dynamic";
 
-import { Suspense, useEffect, useMemo, useState, useCallback } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Modal from "@/app/components/Modal";
 
@@ -23,6 +23,9 @@ type Property = {
   notes?: string | null;
   imageUrl?: string | null;
   archived: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  tags?: string[]; // NEW
 };
 
 export default function PropertiesPageWrapper() {
@@ -44,6 +47,9 @@ function PropertiesPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
 
+  // NEW: buffer the raw tags text like Contacts does
+  const [tagsText, setTagsText] = useState<string>("");
+
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -52,7 +58,7 @@ function PropertiesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/properties?q=${encodeURIComponent(q)}`);
+    const res = await fetch(`/api/properties?q=${encodeURIComponent(q)}`, { cache: "no-store" });
     const j = await res.json();
     setItems(j.items || []);
     setLoading(false);
@@ -85,22 +91,39 @@ function PropertiesPage() {
     setPreview(null);
     setUploading(false);
     setUploadErr(null);
+    setTagsText(""); // reset buffer
   };
 
   useEffect(() => {
     let active = true;
     async function hydrate() {
       if (isNew) {
-        setForm({ addressLine1: "", city: "", forType: "RENT", imageUrl: null } as any);
+        const fresh = { addressLine1: "", city: "", forType: "RENT", imageUrl: null, tags: [] } as any;
+        setForm(fresh);
+        setTagsText(""); // NEW
         return;
       }
       if (editId) {
         const fromList = items.find(i => i.id === editId);
-        if (fromList) { active && setForm(fromList); return; }
-        const r = await fetch(`/api/properties/${editId}`);
-        if (r.ok) { const one = await r.json(); active && setForm(one); }
-        else active && setForm(null);
-      } else setForm(null);
+        if (fromList) {
+          if (active) {
+            setForm(fromList);
+            setTagsText(Array.isArray(fromList.tags) ? fromList.tags.join(", ") : ""); // NEW
+          }
+          return;
+        }
+        const r = await fetch(`/api/properties/${editId}`, { cache: "no-store" });
+        if (r.ok) {
+          const one = await r.json();
+          if (active) {
+            setForm(one);
+            setTagsText(Array.isArray(one.tags) ? one.tags.join(", ") : ""); // NEW
+          }
+        } else active && setForm(null);
+      } else {
+        setForm(null);
+        setTagsText(""); // NEW
+      }
     }
     hydrate(); return () => { active = false; };
   }, [editId, isNew, items]);
@@ -109,10 +132,24 @@ function PropertiesPage() {
     if (!form) return;
     const method = (form as any).id ? "PUT" : "POST";
     const url = (form as any).id ? `/api/properties/${(form as any).id}` : `/api/properties`;
+
+    // Parse tags from the buffered text (allow commas OR spaces), normalize to lowercase
+    const parsedTags =
+      (tagsText || "")
+        .split(/[,\s]+/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(s => s.toLowerCase());
+
+    const payload: any = {
+      ...form,
+      tags: parsedTags,
+    };
+
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     if (res.ok) { closeModal(); await load(); } else alert("Save failed");
   }
@@ -123,7 +160,7 @@ function PropertiesPage() {
     if (res.ok) load();
   }
 
-  // Client-side search across any field
+  // Client-side display: quick keyword filtering
   const filteredSorted = useMemo(() => {
     const raw = q.trim().toLowerCase();
     if (!raw) {
@@ -131,11 +168,10 @@ function PropertiesPage() {
         (a.addressLine1 || "").toLowerCase().localeCompare((b.addressLine1 || "").toLowerCase())
       );
     }
-    const tokens = raw.split(/\s+/).filter(Boolean);
+    // NEW: split search tokens on commas OR spaces
+    const tokens = raw.split(/[,\s]+/).filter(Boolean);
 
-    function norm(v: any) {
-      return (v ?? "").toString().toLowerCase();
-    }
+    function norm(v: any) { return (v ?? "").toString().toLowerCase(); }
 
     function matches(p: Property) {
       const parts: string[] = [
@@ -156,6 +192,11 @@ function PropertiesPage() {
       if (typeof p.beds === "number") parts.push(String(p.beds), `${p.beds} bed`, `${p.beds} beds`);
       if (typeof p.baths === "number") parts.push(String(p.baths), `${p.baths} bath`, `${p.baths} baths`);
 
+      // include tags
+      if (Array.isArray(p.tags)) {
+        p.tags.forEach(t => parts.push(norm(t)));
+      }
+
       const hay = parts.join(" ");
       return tokens.every(t => hay.includes(t));
     }
@@ -165,7 +206,7 @@ function PropertiesPage() {
     );
   }, [items, q]);
 
-  // Upload handling
+  // Upload handling — FIX: removed capture="environment"
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] || null;
     setFile(f);
@@ -210,7 +251,7 @@ function PropertiesPage() {
             className="input flex-1 md:w-96"
             type="search"
             enterKeyHint="search"
-            placeholder="Search rent/sale, price, beds, baths, address, owner…"
+            placeholder="Search rent/sale, price, beds, baths, address, owner, tags…"
             value={q}
             onChange={e => setQ(e.target.value)}
           />
@@ -262,6 +303,15 @@ function PropertiesPage() {
                     </p>
                   </div>
                 </div>
+
+                {/* Tags display */}
+                {Array.isArray(p.tags) && p.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {p.tags.map((t, i) => (
+                      <span key={`${t}-${i}`} className="pill">{t}</span>
+                    ))}
+                  </div>
+                )}
 
                 {p.ownerName && (
                   <div className="text-sm text-gray-400">Owner: {p.ownerName}</div>
@@ -318,8 +368,7 @@ function PropertiesPage() {
                 className="input"
                 type="file"
                 accept="image/*"
-                capture="environment"
-                onChange={onPick}
+                onChange={onPick} // <= no capture attribute
               />
 
               <div className="flex gap-2 mt-3">
@@ -358,42 +407,49 @@ function PropertiesPage() {
               </select>
             </div>
 
+            {/* Safer numeric inputs */}
             <div className="field">
               <label className="label">Price</label>
               <input
-                type="text"
+                type="number"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 className="input"
                 enterKeyHint="done"
                 value={form?.price ?? ""}
-                onChange={e => setForm({ ...form!, price: e.target.value ? Number(e.target.value) : null })}
+                onChange={(e) => {
+                  const val = e.currentTarget.value.trim();
+                  setForm(prev => ({ ...prev!, price: val === "" ? null : Number.isFinite(Number(val)) ? Number(val) : (prev?.price ?? null) }));
+                }}
               />
             </div>
 
             <div className="field">
               <label className="label">Beds</label>
               <input
-                type="text"
+                type="number"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 className="input"
                 enterKeyHint="done"
                 value={form?.beds ?? ""}
-                onChange={e => setForm({ ...form!, beds: e.target.value ? Number(e.target.value) : null })}
+                onChange={(e) => {
+                  const val = e.currentTarget.value.trim();
+                  setForm(prev => ({ ...prev!, beds: val === "" ? null : Number.isFinite(Number(val)) ? Number(val) : (prev?.beds ?? null) }));
+                }}
               />
             </div>
 
             <div className="field">
               <label className="label">Baths</label>
               <input
-                type="text"
+                type="number"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 className="input"
                 enterKeyHint="done"
                 value={form?.baths ?? ""}
-                onChange={e => setForm({ ...form!, baths: e.target.value ? Number(e.target.value) : null })}
+                onChange={(e) => {
+                  const val = e.currentTarget.value.trim();
+                  setForm(prev => ({ ...prev!, baths: val === "" ? null : Number.isFinite(Number(val)) ? Number(val) : (prev?.baths ?? null) }));
+                }}
               />
             </div>
 
@@ -465,6 +521,18 @@ function PropertiesPage() {
                 enterKeyHint="done"
                 value={form?.ownerEmail || ""}
                 onChange={e => setForm({ ...form!, ownerEmail: e.target.value })}
+              />
+            </div>
+
+            {/* NEW: Tags input (buffered) */}
+            <div className="field" style={{ gridColumn: "1/-1" }}>
+              <label className="label">Tags (comma-separated)</label>
+              <input
+                className="input"
+                type="text"
+                value={tagsText}
+                onChange={(e) => setTagsText(e.currentTarget.value)}
+                placeholder="e.g., sale, ocean view, fixer-upper"
               />
             </div>
 

@@ -50,6 +50,9 @@ export async function GET(req: Request) {
       { tags: { contains: tok, mode: "insensitive" } },
       { lookingFor: { contains: tok, mode: "insensitive" } },
       { lastRentalNotes: { contains: tok, mode: "insensitive" } },
+
+      // NEW: allow searching by Agent on Job
+      { agentOnJob: { contains: tok, mode: "insensitive" } },
     ];
 
     // rental status token -> exact
@@ -84,6 +87,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const data = await req.json();
+
   const created = await prisma.client.create({
     data: {
       firstName: data.firstName || "",
@@ -97,7 +101,11 @@ export async function POST(req: Request) {
       lastRentalStatus: data.lastRentalStatus || "none",
       lastRentalNotes: data.lastRentalNotes || null,
       tags: data.tags || null,
+
+      // NEW: persist Agent on Job
+      agentOnJob: data.agentOnJob || null,
     },
   });
+
   return NextResponse.json(created);
 }

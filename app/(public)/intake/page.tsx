@@ -2,7 +2,13 @@
 import { Suspense } from "react";
 import IntakeIndexClient from "./IntakeIndexClient";
 
-export default function Page() {
+export default function Page({
+  searchParams,
+}: {
+  searchParams: { agent?: string };
+}) {
+  const agent = (searchParams?.agent ?? "").toString();
+
   return (
     <Suspense
       fallback={
@@ -13,7 +19,7 @@ export default function Page() {
         </div>
       }
     >
-      <IntakeIndexClient />
+      <IntakeIndexClient initialAgent={agent} />
     </Suspense>
   );
 }

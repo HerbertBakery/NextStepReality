@@ -1,8 +1,7 @@
 // app/(public)/intake/IntakeIndexClient.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type RentalStatus = "none" | "applied" | "approved" | "declined" | "moved_in" | "moved_out";
 
@@ -12,19 +11,16 @@ type FormData = {
   email: string;
   phone: string;
   birthday: string; // yyyy-mm-dd
-  budgetMin: string; // keep as string to avoid NaN flicker
+  budgetMin: string;
   budgetMax: string;
   lookingFor: string;
   lastRentalStatus: RentalStatus;
   lastRentalNotes: string;
   tags: string;        // comma-separated
-  agentOnJob: string;  // can be prefilled via ?agent=
+  agentOnJob: string;  // can be prefilled via props.initialAgent
 };
 
-export default function PublicIntakePage() {
-  const sp = useSearchParams();
-  const agentFromQS = useMemo(() => sp.get("agent") ?? "", [sp]);
-
+export default function IntakeIndexClient({ initialAgent }: { initialAgent: string }) {
   const [data, setData] = useState<FormData>({
     firstName: "",
     lastName: "",
@@ -44,18 +40,18 @@ export default function PublicIntakePage() {
   const [ok, setOk] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  // Prefill agentOnJob from ?agent=
+  // Prefill agent from the server-provided query param
   useEffect(() => {
-    if (agentFromQS && !data.agentOnJob) {
-      setData((d) => ({ ...d, agentOnJob: agentFromQS }));
+    if (initialAgent && !data.agentOnJob) {
+      setData((d) => ({ ...d, agentOnJob: initialAgent }));
     }
-  }, [agentFromQS]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAgent]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true); setOk(null); setErr(null);
 
-    // Build payload; backend also accepts ?agent= but we’ll send agentOnJob explicitly
     const payload = {
       firstName: data.firstName.trim(),
       lastName: data.lastName.trim(),
@@ -67,11 +63,12 @@ export default function PublicIntakePage() {
       lookingFor: data.lookingFor.trim() || null,
       lastRentalStatus: data.lastRentalStatus,
       lastRentalNotes: data.lastRentalNotes.trim() || null,
-      tags: data.tags.trim(),          // stored as comma string in Client
-      agentOnJob: data.agentOnJob.trim() || agentFromQS || null,
+      tags: data.tags.trim(),
+      agentOnJob: data.agentOnJob.trim() || initialAgent || null,
     };
 
-    const res = await fetch(`/api/public/intake${agentFromQS ? `?agent=${encodeURIComponent(agentFromQS)}` : ""}`, {
+    const qs = initialAgent ? `?agent=${encodeURIComponent(initialAgent)}` : "";
+    const res = await fetch(`/api/public/intake${qs}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -122,7 +119,7 @@ export default function PublicIntakePage() {
             value={data.email}
             onChange={(e) => setData({ ...data, email: e.currentTarget.value })}
           />
-          <input
+        <input
             className="input"
             type="tel"
             placeholder="Phone"
@@ -199,7 +196,7 @@ export default function PublicIntakePage() {
             <select
               className="input"
               value={data.lastRentalStatus}
-              onChange={(e) => setData({ ...data, lastRentalStatus: e.target.value as RentalStatus })}
+              onChange={(e) => setData({ ...data, lastRentalStatus: e.currentTarget.value as RentalStatus })}
             >
               <option value="none">None</option>
               <option value="applied">Applied</option>

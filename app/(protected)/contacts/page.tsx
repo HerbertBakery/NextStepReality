@@ -39,7 +39,7 @@ function ContactsPage() {
   const [items, setItems] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Partial<Client> | null>(null);
-  const [selected, setSelected] = useState<Record<string, boolean>>({}); // NEW
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
 
   const router = useRouter();
   const pathname = usePathname();
@@ -53,7 +53,7 @@ function ContactsPage() {
     const j = await res.json();
     setItems(j.items || []);
     setLoading(false);
-    setSelected({ }); // clear selection when list changes
+    setSelected({}); // clear selection when list changes
   }, [q]);
 
   useEffect(() => { load(); }, [load]);
@@ -145,15 +145,15 @@ function ContactsPage() {
     if (res.ok) load();
   }
 
-  // Selection helpers (NEW)
+  // Selection helpers
   const toggleSelect = (id: string, checked: boolean) =>
     setSelected(prev => ({ ...prev, [id]: checked }));
+
   const anySelected = useMemo(() => Object.values(selected).some(Boolean), [selected]);
+
   const filteredSorted = useMemo(() => {
     const raw = q.trim().toLowerCase();
-    if (!raw) {
-      return [...items].sort(sortByName);
-    }
+    if (!raw) return [...items].sort(sortByName);
     const tokens = raw.split(/[,\s]+/).filter(Boolean);
 
     function matches(c: Client) {
@@ -177,11 +177,6 @@ function ContactsPage() {
 
   const allSelectedOnPage = filteredSorted.length > 0 && filteredSorted.every(c => selected[c.id]);
   const someSelectedOnPage = filteredSorted.some(c => selected[c.id]) && !allSelectedOnPage;
-  const toggleAllOnPage = (checked: boolean) => {
-    const updates: Record<string, boolean> = {};
-    filteredSorted.forEach(c => { updates[c.id] = checked; });
-    setSelected(prev => ({ ...prev, ...updates }));
-  };
 
   const selectedEmails = useMemo(() => {
     const set = new Set<string>();
@@ -218,155 +213,134 @@ function ContactsPage() {
   const setField = <K extends keyof Client>(k: K, v: Client[K]) => setForm(prev => ({ ...(prev as any), [k]: v }));
 
   return (
-    <div className="space-y-6 w-full">
-      {/* Header: search ALWAYS visible; actions wrap; Export moved to More menu */}
-      <div className="flex flex-col gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white mt-1">Clients</h1>
-          <p className="text-sm text-gray-400">Manage client records and rental/budget details.</p>
-        </div>
+    <div className="space-y-5 w-full">
+      {/* Title */}
+      <div>
+        <h1 className="text-2xl font-bold text-white mt-1">Clients</h1>
+        <p className="text-sm text-gray-400">Manage client records and rental/budget details.</p>
+      </div>
 
-        {/* Search row (full width on mobile) */}
-        <div className="w-full">
-          <label className="sr-only" htmlFor="contact-search">Search clients</label>
-          <input
-            id="contact-search"
-            className="input w-full"
-            type="search"
-            enterKeyHint="search"
-            placeholder="Search name, email, phone, tags, status, birthday, budget…"
-            value={q}
-            onChange={e => setQ(e.target.value)}
-          />
-        </div>
+      {/* Search FIRST (mobile-friendly full width) */}
+      <div className="w-full">
+        <label className="sr-only" htmlFor="contact-search">Search clients</label>
+        <input
+          id="contact-search"
+          className="input w-full"
+          type="search"
+          enterKeyHint="search"
+          placeholder="Search name, email, phone, tags, status, birthday, budget…"
+          value={q}
+          onChange={e => setQ(e.target.value)}
+        />
+      </div>
 
-        {/* Actions row (wraps on small screens) */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button className="btn secondary whitespace-nowrap" onClick={copyEmails}>
-            {anySelected ? "Copy Selected Emails" : "Copy All Emails"}
-          </button>
-          <button className="btn whitespace-nowrap" onClick={emailAll}>
-            {anySelected ? "Email Selected" : "Email All"}
-          </button>
-
-          {/* More menu keeps header compact; Export Email moved here */}
-          <details className="relative">
-            <summary className="btn" role="button">More</summary>
-            <div className="absolute right-0 mt-2 w-64 rounded-xl border border-slate-800 bg-slate-900/95 shadow-xl p-2 z-10">
-              <a
-                className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5"
-                href="/api/clients/export"
-              >
-                Export emails (CSV)
-              </a>
-              <button
-                className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5"
-                onClick={() => {
-                  const text = selectedEmails.join("\n");
-                  if (!text) { alert("No emails to copy."); return; }
-                  navigator.clipboard.writeText(text).catch(() => {});
-                }}
-              >
-                Copy emails (one per line)
-              </button>
-            </div>
-          </details>
-
-          <div className="ms-auto">
-            <button className="btn" onClick={openCreate}>Add</button>
-          </div>
+      {/* Actions — wrap on mobile */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button className="btn secondary whitespace-nowrap" onClick={copyEmails}>
+          {anySelected ? "Copy Selected Emails" : "Copy All Emails"}
+        </button>
+        <button className="btn whitespace-nowrap" onClick={emailAll}>
+          {anySelected ? "Email Selected" : "Email All"}
+        </button>
+        <div className="ms-auto">
+          <button className="btn" onClick={openCreate}>Add</button>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table: horizontal scroll on small screens */}
       <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-900/40 shadow-md">
-        <table className="min-w-full border-collapse">
-          <thead className="bg-slate-800/60">
-            <tr>
-              <th className="px-3 py-3 text-left text-gray-400 font-semibold w-10">
-                <input
-                  aria-label="Select all"
-                  type="checkbox"
-                  checked={filteredSorted.length > 0 && filteredSorted.every(c => selected[c.id])}
-                  ref={el => { if (el) el.indeterminate = filteredSorted.some(c => selected[c.id]) && !(filteredSorted.length > 0 && filteredSorted.every(c => selected[c.id])); }}
-                  onChange={(e) => {
-                    const checked = e.currentTarget.checked;
-                    const updates: Record<string, boolean> = {};
-                    filteredSorted.forEach(c => { updates[c.id] = checked; });
-                    setSelected(prev => ({ ...prev, ...updates }));
-                  }}
-                />
-              </th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Name / Tags</th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Email</th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Phone</th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Status</th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Budget</th>
-              <th className="px-4 py-3 text-left text-gray-400 font-semibold">Agent on job</th>
-              <th className="px-4 py-3 text-right text-gray-400 font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={8} className="text-center py-6 text-gray-500">Loading…</td></tr>
-            ) : filteredSorted.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-6 text-gray-500">No clients found.</td></tr>
-            ) : (
-              filteredSorted.map((c, i) => (
-                <tr
-                  key={c.id}
-                  className={(i % 2 === 0 ? "bg-slate-950/40 " : "bg-slate-900/40 ") + "cursor-pointer hover:bg-indigo-500/10 transition"}
-                  onClick={() => openEdit(c.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => (e.key === "Enter" || e.key === " ") && openEdit(c.id)}
-                >
-                  <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      aria-label={`Select ${c.firstName} ${c.lastName}`}
-                      type="checkbox"
-                      checked={!!selected[c.id]}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        toggleSelect(c.id, e.currentTarget.checked);
-                      }}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-white">{c.firstName} {c.lastName}</div>
-                    {c.tags && (
-                      <div className="mt-1">
-                        {c.tags.split(",").map((t, idx) => (
-                          <span key={`${t}-${idx}`} className="pill mr-2">{t.trim()}</span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">{c.email ?? "—"}</td>
-                  <td className="px-4 py-3">{c.phone ?? "—"}</td>
-                  <td className="px-4 py-3 capitalize">{(c.lastRentalStatus || "none").replace("_"," ")}</td>
-                  <td className="px-4 py-3">
-                    {(typeof c.budgetMin === "number" || typeof c.budgetMax === "number")
-                      ? `${c.budgetMin ?? "—"} – ${c.budgetMax ?? "—"}`
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-3">{c.agentOnJob || "—"}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); archive(c.id); }}
-                      className="text-red-400 hover:text-red-300 text-sm font-medium"
-                    >
-                      Archive
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-collapse">
+            <thead className="bg-slate-800/60">
+              <tr>
+                <th className="px-3 py-3 text-left text-gray-400 font-semibold w-10">
+                  <input
+                    aria-label="Select all"
+                    type="checkbox"
+                    checked={allSelectedOnPage}
+                    ref={el => {
+                      if (el) el.indeterminate = someSelectedOnPage;
+                    }}
+                    onChange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      const updates: Record<string, boolean> = {};
+                      filteredSorted.forEach(c => { updates[c.id] = checked; });
+                      setSelected(prev => ({ ...prev, ...updates }));
+                    }}
+                  />
+                </th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold">Name / Tags</th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold">Email</th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold">Phone</th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold">Status</th>
+                {/* Hide less-critical columns on small screens */}
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold hidden md:table-cell">Budget</th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold hidden md:table-cell">Agent on job</th>
+                <th className="px-4 py-3 text-right text-gray-400 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={8} className="text-center py-6 text-gray-500">Loading…</td></tr>
+              ) : filteredSorted.length === 0 ? (
+                <tr><td colSpan={8} className="text-center py-6 text-gray-500">No clients found.</td></tr>
+              ) : (
+                filteredSorted.map((c, i) => (
+                  <tr
+                    key={c.id}
+                    className={(i % 2 === 0 ? "bg-slate-950/40 " : "bg-slate-900/40 ") + "cursor-pointer hover:bg-indigo-500/10 transition"}
+                    onClick={() => openEdit(c.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={e => (e.key === "Enter" || e.key === " ") && openEdit(c.id)}
+                  >
+                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        aria-label={`Select ${c.firstName} ${c.lastName}`}
+                        type="checkbox"
+                        checked={!!selected[c.id]}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelect(c.id, e.currentTarget.checked);
+                        }}
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-white">{c.firstName} {c.lastName}</div>
+                      {c.tags && (
+                        <div className="mt-1">
+                          {c.tags.split(",").map((t, idx) => (
+                            <span key={`${t}-${idx}`} className="pill mr-2">{t.trim()}</span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">{c.email ?? "—"}</td>
+                    <td className="px-4 py-3">{c.phone ?? "—"}</td>
+                    <td className="px-4 py-3 capitalize">{(c.lastRentalStatus || "none").replace("_"," ")}</td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      {(typeof c.budgetMin === "number" || typeof c.budgetMax === "number")
+                        ? `${c.budgetMin ?? "—"} – ${c.budgetMax ?? "—"}`
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">{c.agentOnJob || "—"}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); archive(c.id); }}
+                        className="text-red-400 hover:text-red-300 text-sm font-medium"
+                      >
+                        Archive
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {(form) && (
+      {form && (
         <Modal
           title={(form as any)?.id ? "Edit Client" : "New Client"}
           onClose={closeModal}
@@ -537,6 +511,6 @@ function toDateInputValue(v?: string | null) {
   const d = new Date(v);
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+  const dd = String(d.getDate()).toString().padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }

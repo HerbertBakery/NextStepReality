@@ -53,7 +53,7 @@ function ContactsPage() {
     const j = await res.json();
     setItems(j.items || []);
     setLoading(false);
-    setSelected({}); // clear selection when list changes
+    setSelected({ }); // clear selection when list changes
   }, [q]);
 
   useEffect(() => { load(); }, [load]);
@@ -148,41 +148,13 @@ function ContactsPage() {
   // Selection helpers (NEW)
   const toggleSelect = (id: string, checked: boolean) =>
     setSelected(prev => ({ ...prev, [id]: checked }));
-  const allVisibleIds = useMemo(() => items.map(i => i.id), [items]);
   const anySelected = useMemo(() => Object.values(selected).some(Boolean), [selected]);
-  const selectedEmails = useMemo(() => {
-    const set = new Set<string>();
-    items.forEach(i => {
-      const useIt = anySelected ? !!selected[i.id] : true;
-      if (useIt && i.email) set.add(i.email);
-    });
-    return Array.from(set);
-  }, [items, selected, anySelected]);
-
-  async function copyEmails() {
-    if (selectedEmails.length === 0) { alert("No emails to copy."); return; }
-    const text = selectedEmails.join(", ");
-    try {
-      await navigator.clipboard.writeText(text);
-      alert(`Copied ${selectedEmails.length} email(s) to clipboard.`);
-    } catch {
-      prompt("Copy these emails:", text);
-    }
-  }
-  function emailAll() {
-    if (selectedEmails.length === 0) { alert("No emails to email."); return; }
-    const bcc = encodeURIComponent(selectedEmails.join(","));
-    // empty "to" plus BCC = better privacy
-    window.location.href = `mailto:?bcc=${bcc}`;
-  }
-
-  // ------- Search across ANY field -------
   const filteredSorted = useMemo(() => {
     const raw = q.trim().toLowerCase();
     if (!raw) {
       return [...items].sort(sortByName);
     }
-    const tokens = raw.split(/\s+/).filter(Boolean);
+    const tokens = raw.split(/[,\s]+/).filter(Boolean);
 
     function matches(c: Client) {
       const pack: string[] = [
@@ -203,6 +175,39 @@ function ContactsPage() {
     return items.filter(matches).sort(sortByName);
   }, [items, q]);
 
+  const allSelectedOnPage = filteredSorted.length > 0 && filteredSorted.every(c => selected[c.id]);
+  const someSelectedOnPage = filteredSorted.some(c => selected[c.id]) && !allSelectedOnPage;
+  const toggleAllOnPage = (checked: boolean) => {
+    const updates: Record<string, boolean> = {};
+    filteredSorted.forEach(c => { updates[c.id] = checked; });
+    setSelected(prev => ({ ...prev, ...updates }));
+  };
+
+  const selectedEmails = useMemo(() => {
+    const set = new Set<string>();
+    filteredSorted.forEach(i => {
+      const useIt = anySelected ? !!selected[i.id] : true;
+      if (useIt && i.email) set.add(i.email);
+    });
+    return Array.from(set);
+  }, [filteredSorted, selected, anySelected]);
+
+  async function copyEmails() {
+    if (selectedEmails.length === 0) { alert("No emails to copy."); return; }
+    const text = selectedEmails.join(", ");
+    try {
+      await navigator.clipboard.writeText(text);
+      alert(`Copied ${selectedEmails.length} email(s) to clipboard.`);
+    } catch {
+      prompt("Copy these emails:", text);
+    }
+  }
+  function emailAll() {
+    if (selectedEmails.length === 0) { alert("No emails to email."); return; }
+    const bcc = encodeURIComponent(selectedEmails.join(","));
+    window.location.href = `mailto:?bcc=${bcc}`;
+  }
+
   function sortByName(a: Client, b: Client) {
     const la = (a.lastName || "").toLowerCase();
     const lb = (b.lastName || "").toLowerCase();
@@ -212,40 +217,64 @@ function ContactsPage() {
 
   const setField = <K extends keyof Client>(k: K, v: Client[K]) => setForm(prev => ({ ...(prev as any), [k]: v }));
 
-  // master checkbox state
-  const allSelectedOnPage = filteredSorted.length > 0 && filteredSorted.every(c => selected[c.id]);
-  const someSelectedOnPage = filteredSorted.some(c => selected[c.id]) && !allSelectedOnPage;
-  const toggleAllOnPage = (checked: boolean) => {
-    const updates: Record<string, boolean> = {};
-    filteredSorted.forEach(c => { updates[c.id] = checked; });
-    setSelected(prev => ({ ...prev, ...updates }));
-  };
-
   return (
     <div className="space-y-6 w-full">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+      {/* Header: search ALWAYS visible; actions wrap; Export moved to More menu */}
+      <div className="flex flex-col gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white mt-1">Clients</h1>
           <p className="text-sm text-gray-400">Manage client records and rental/budget details.</p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
+
+        {/* Search row (full width on mobile) */}
+        <div className="w-full">
+          <label className="sr-only" htmlFor="contact-search">Search clients</label>
           <input
-            className="input flex-1 md:w-96"
+            id="contact-search"
+            className="input w-full"
             type="search"
             enterKeyHint="search"
             placeholder="Search name, email, phone, tags, status, birthday, budget…"
             value={q}
             onChange={e => setQ(e.target.value)}
           />
-          <a href="/api/clients/export" className="btn whitespace-nowrap">Export Emails (CSV)</a>
+        </div>
+
+        {/* Actions row (wraps on small screens) */}
+        <div className="flex items-center gap-2 flex-wrap">
           <button className="btn secondary whitespace-nowrap" onClick={copyEmails}>
             {anySelected ? "Copy Selected Emails" : "Copy All Emails"}
           </button>
           <button className="btn whitespace-nowrap" onClick={emailAll}>
             {anySelected ? "Email Selected" : "Email All"}
           </button>
-          <button className="btn" onClick={openCreate}>Add</button>
+
+          {/* More menu keeps header compact; Export Email moved here */}
+          <details className="relative">
+            <summary className="btn" role="button">More</summary>
+            <div className="absolute right-0 mt-2 w-64 rounded-xl border border-slate-800 bg-slate-900/95 shadow-xl p-2 z-10">
+              <a
+                className="block w-full text-left px-3 py-2 rounded-lg hover:bg-white/5"
+                href="/api/clients/export"
+              >
+                Export emails (CSV)
+              </a>
+              <button
+                className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5"
+                onClick={() => {
+                  const text = selectedEmails.join("\n");
+                  if (!text) { alert("No emails to copy."); return; }
+                  navigator.clipboard.writeText(text).catch(() => {});
+                }}
+              >
+                Copy emails (one per line)
+              </button>
+            </div>
+          </details>
+
+          <div className="ms-auto">
+            <button className="btn" onClick={openCreate}>Add</button>
+          </div>
         </div>
       </div>
 
@@ -258,9 +287,14 @@ function ContactsPage() {
                 <input
                   aria-label="Select all"
                   type="checkbox"
-                  checked={allSelectedOnPage}
-                  ref={el => { if (el) el.indeterminate = someSelectedOnPage; }}
-                  onChange={(e) => toggleAllOnPage(e.currentTarget.checked)}
+                  checked={filteredSorted.length > 0 && filteredSorted.every(c => selected[c.id])}
+                  ref={el => { if (el) el.indeterminate = filteredSorted.some(c => selected[c.id]) && !(filteredSorted.length > 0 && filteredSorted.every(c => selected[c.id])); }}
+                  onChange={(e) => {
+                    const checked = e.currentTarget.checked;
+                    const updates: Record<string, boolean> = {};
+                    filteredSorted.forEach(c => { updates[c.id] = checked; });
+                    setSelected(prev => ({ ...prev, ...updates }));
+                  }}
                 />
               </th>
               <th className="px-4 py-3 text-left text-gray-400 font-semibold">Name / Tags</th>
@@ -292,7 +326,10 @@ function ContactsPage() {
                       aria-label={`Select ${c.firstName} ${c.lastName}`}
                       type="checkbox"
                       checked={!!selected[c.id]}
-                      onChange={(e) => toggleSelect(c.id, e.currentTarget.checked)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleSelect(c.id, e.currentTarget.checked);
+                      }}
                     />
                   </td>
                   <td className="px-4 py-3">

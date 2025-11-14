@@ -1,7 +1,7 @@
 // app/(public)/intake/IntakeIndexClient.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type RentalStatus = "none" | "applied" | "approved" | "declined" | "moved_in" | "moved_out";
 
@@ -11,13 +11,9 @@ type FormData = {
   email: string;
   phone: string;
   birthday: string; // yyyy-mm-dd
-  budgetMin: string;
   budgetMax: string;
   lookingFor: string;
-  lastRentalStatus: RentalStatus;
   lastRentalNotes: string;
-  tags: string;        // comma-separated
-  agentOnJob: string;  // can be prefilled via props.initialAgent
 };
 
 export default function IntakeIndexClient({ initialAgent }: { initialAgent: string }) {
@@ -27,30 +23,20 @@ export default function IntakeIndexClient({ initialAgent }: { initialAgent: stri
     email: "",
     phone: "",
     birthday: "",
-    budgetMin: "",
     budgetMax: "",
     lookingFor: "",
-    lastRentalStatus: "none",
     lastRentalNotes: "",
-    tags: "",
-    agentOnJob: "",
   });
 
   const [saving, setSaving] = useState(false);
   const [ok, setOk] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  // Prefill agent from the server-provided query param
-  useEffect(() => {
-    if (initialAgent && !data.agentOnJob) {
-      setData((d) => ({ ...d, agentOnJob: initialAgent }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialAgent]);
-
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true); setOk(null); setErr(null);
+    setSaving(true);
+    setOk(null);
+    setErr(null);
 
     const payload = {
       firstName: data.firstName.trim(),
@@ -58,13 +44,16 @@ export default function IntakeIndexClient({ initialAgent }: { initialAgent: stri
       email: data.email.trim() || null,
       phone: data.phone.trim() || null,
       birthday: data.birthday || null,
-      budgetMin: data.budgetMin.trim() === "" ? null : Number(data.budgetMin),
+      // budgetMin removed from UI, always null
+      budgetMin: null as number | null,
       budgetMax: data.budgetMax.trim() === "" ? null : Number(data.budgetMax),
       lookingFor: data.lookingFor.trim() || null,
-      lastRentalStatus: data.lastRentalStatus,
+      // rental status + tags removed from UI, but we send safe defaults
+      lastRentalStatus: "none" as RentalStatus,
       lastRentalNotes: data.lastRentalNotes.trim() || null,
-      tags: data.tags.trim(),
-      agentOnJob: data.agentOnJob.trim() || initialAgent || null,
+      tags: "",
+      // agent on job removed from UI, but still tie to initialAgent if present
+      agentOnJob: initialAgent || null,
     };
 
     const qs = initialAgent ? `?agent=${encodeURIComponent(initialAgent)}` : "";
@@ -98,14 +87,18 @@ export default function IntakeIndexClient({ initialAgent }: { initialAgent: stri
             className="input"
             placeholder="First name *"
             value={data.firstName}
-            onChange={(e) => setData({ ...data, firstName: e.currentTarget.value })}
+            onChange={(e) =>
+              setData({ ...data, firstName: e.currentTarget.value })
+            }
             required
           />
           <input
             className="input"
             placeholder="Last name *"
             value={data.lastName}
-            onChange={(e) => setData({ ...data, lastName: e.currentTarget.value })}
+            onChange={(e) =>
+              setData({ ...data, lastName: e.currentTarget.value })
+            }
             required
           />
         </div>
@@ -117,67 +110,48 @@ export default function IntakeIndexClient({ initialAgent }: { initialAgent: stri
             type="email"
             placeholder="Email"
             value={data.email}
-            onChange={(e) => setData({ ...data, email: e.currentTarget.value })}
+            onChange={(e) =>
+              setData({ ...data, email: e.currentTarget.value })
+            }
           />
-        <input
+          <input
             className="input"
             type="tel"
             placeholder="Phone"
             value={data.phone}
-            onChange={(e) => setData({ ...data, phone: e.currentTarget.value })}
+            onChange={(e) =>
+              setData({ ...data, phone: e.currentTarget.value })
+            }
           />
         </div>
 
-        {/* Dates / Agent */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="label">Birthday</label>
-            <input
-              className="input"
-              type="date"
-              value={data.birthday}
-              onChange={(e) => setData({ ...data, birthday: e.currentTarget.value })}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="label">Agent on job</label>
-            <input
-              className="input"
-              placeholder="Agent name"
-              value={data.agentOnJob}
-              onChange={(e) => setData({ ...data, agentOnJob: e.currentTarget.value })}
-            />
-          </div>
+        {/* Birthday */}
+        <div className="space-y-1">
+          <label className="label">Birthday</label>
+          <input
+            className="input"
+            type="date"
+            value={data.birthday}
+            onChange={(e) =>
+              setData({ ...data, birthday: e.currentTarget.value })
+            }
+          />
         </div>
 
-        {/* Budgets */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="label">Budget min</label>
-            <input
-              className="input"
-              type="number"
-              inputMode="numeric"
-              value={data.budgetMin}
-              onChange={(e) => {
-                const v = e.currentTarget.value;
-                if (v === "" || Number.isFinite(Number(v))) setData({ ...data, budgetMin: v });
-              }}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="label">Budget max</label>
-            <input
-              className="input"
-              type="number"
-              inputMode="numeric"
-              value={data.budgetMax}
-              onChange={(e) => {
-                const v = e.currentTarget.value;
-                if (v === "" || Number.isFinite(Number(v))) setData({ ...data, budgetMax: v });
-              }}
-            />
-          </div>
+        {/* Budget (max only) */}
+        <div className="space-y-1">
+          <label className="label">Budget max</label>
+          <input
+            className="input"
+            type="number"
+            inputMode="numeric"
+            value={data.budgetMax}
+            onChange={(e) => {
+              const v = e.currentTarget.value;
+              if (v === "" || Number.isFinite(Number(v)))
+                setData({ ...data, budgetMax: v });
+            }}
+          />
         </div>
 
         {/* Preferences */}
@@ -186,55 +160,54 @@ export default function IntakeIndexClient({ initialAgent }: { initialAgent: stri
           rows={3}
           placeholder="What are you looking for?"
           value={data.lookingFor}
-          onChange={(e) => setData({ ...data, lookingFor: e.currentTarget.value })}
+          onChange={(e) =>
+            setData({ ...data, lookingFor: e.currentTarget.value })
+          }
         />
 
-        {/* Status / Notes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="label">Rental status</label>
-            <select
-              className="input"
-              value={data.lastRentalStatus}
-              onChange={(e) => setData({ ...data, lastRentalStatus: e.currentTarget.value as RentalStatus })}
-            >
-              <option value="none">None</option>
-              <option value="applied">Applied</option>
-              <option value="approved">Approved</option>
-              <option value="declined">Declined</option>
-              <option value="moved_in">Moved In</option>
-              <option value="moved_out">Moved Out</option>
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label className="label">Tags (comma-separated)</label>
-            <input
-              className="input"
-              placeholder="vip, newsletter"
-              value={data.tags}
-              onChange={(e) => setData({ ...data, tags: e.currentTarget.value })}
-            />
-          </div>
-        </div>
-
+        {/* Notes */}
         <textarea
           className="input"
           rows={3}
           placeholder="Notes"
           value={data.lastRentalNotes}
-          onChange={(e) => setData({ ...data, lastRentalNotes: e.currentTarget.value })}
+          onChange={(e) =>
+            setData({ ...data, lastRentalNotes: e.currentTarget.value })
+          }
         />
 
         {ok && <p className="text-green-300">{ok}</p>}
         {err && <p className="text-red-300">{err}</p>}
 
-        <button disabled={saving} className="btn">{saving ? "Submitting…" : "Submit"}</button>
+        <button disabled={saving} className="btn">
+          {saving ? "Submitting…" : "Submit"}
+        </button>
       </form>
 
       <style jsx global>{`
-        .input { background: rgba(2,6,23,.6); border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 10px 12px; color: #e5e7eb; }
-        .label { color: #cbd5e1; font-size: .9rem; display: inline-block; margin-bottom: 4px; }
-        .btn { height: 44px; padding: 0 16px; border-radius: 12px; background: linear-gradient(180deg, #4f46e5, #4338ca); color: white; font-weight: 700; border: 1px solid rgba(255,255,255,.2); margin-top: 6px; }
+        .input {
+          background: rgba(2, 6, 23, 0.6);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          border-radius: 12px;
+          padding: 10px 12px;
+          color: #e5e7eb;
+        }
+        .label {
+          color: #cbd5e1;
+          font-size: 0.9rem;
+          display: inline-block;
+          margin-bottom: 4px;
+        }
+        .btn {
+          height: 44px;
+          padding: 0 16px;
+          border-radius: 12px;
+          background: linear-gradient(180deg, #4f46e5, #4338ca);
+          color: white;
+          font-weight: 700;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          margin-top: 6px;
+        }
       `}</style>
     </Shell>
   );

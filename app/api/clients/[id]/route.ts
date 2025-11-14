@@ -21,12 +21,14 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       email: data.email || null,
       phone: data.phone || null,
       birthday: data.birthday ? new Date(data.birthday) : null,
+      moveOutDate: data.moveOutDate ? new Date(data.moveOutDate) : null,
       budgetMin: data.budgetMin ?? null,
       budgetMax: data.budgetMax ?? null,
       lookingFor: data.lookingFor || null,
       lastRentalStatus: data.lastRentalStatus || "none",
       lastRentalNotes: data.lastRentalNotes || null,
       tags: data.tags || null,
+      agentOnJob: data.agentOnJob || null,
     },
   });
   return NextResponse.json(updated);

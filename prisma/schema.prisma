@@ -29,6 +29,7 @@ model Client {
   email            String?      @unique
   phone            String?
   birthday         DateTime?
+  moveOutDate      DateTime?    // NEW: move-out date
   budgetMin        Int?
   budgetMax        Int?
   lookingFor       String?      @db.Text

@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 function parseDateToken(q: string) {
-  // Accept YYYY-MM-DD to match birthday on that day
+  // Accept YYYY-MM-DD to match birthday / moveOutDate on that day
   const m = q.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
   const [_, y, mo, d] = m;
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
       { lookingFor: { contains: tok, mode: "insensitive" } },
       { lastRentalNotes: { contains: tok, mode: "insensitive" } },
 
-      // NEW: allow searching by Agent on Job
+      // allow searching by Agent on Job
       { agentOnJob: { contains: tok, mode: "insensitive" } },
     ];
 
@@ -68,10 +68,11 @@ export async function GET(req: Request) {
       ors.push({ budgetMax: num });
     }
 
-    // date token -> birthday on that day
+    // date token -> birthday / moveOutDate on that day
     const dt = parseDateToken(tok);
     if (dt) {
       ors.push({ birthday: { gte: dt.start, lte: dt.end } });
+      ors.push({ moveOutDate: { gte: dt.start, lte: dt.end } });
     }
 
     return { OR: ors };
@@ -95,6 +96,7 @@ export async function POST(req: Request) {
       email: data.email || null,
       phone: data.phone || null,
       birthday: data.birthday ? new Date(data.birthday) : null,
+      moveOutDate: data.moveOutDate ? new Date(data.moveOutDate) : null,
       budgetMin: data.budgetMin ?? null,
       budgetMax: data.budgetMax ?? null,
       lookingFor: data.lookingFor || null,
@@ -102,7 +104,7 @@ export async function POST(req: Request) {
       lastRentalNotes: data.lastRentalNotes || null,
       tags: data.tags || null,
 
-      // NEW: persist Agent on Job
+      // persist Agent on Job
       agentOnJob: data.agentOnJob || null,
     },
   });

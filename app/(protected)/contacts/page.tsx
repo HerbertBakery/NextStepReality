@@ -14,6 +14,7 @@ type Client = {
   email?: string | null;
   phone?: string | null;
   birthday?: string | null;
+  moveOutDate?: string | null;
   budgetMin?: number | null;
   budgetMax?: number | null;
   lookingFor?: string | null;
@@ -36,6 +37,8 @@ export default function ContactsPageWrapper() {
 
 function ContactsPage() {
   const [q, setQ] = useState("");
+  const [birthdayFilter, setBirthdayFilter] = useState("");
+  const [moveOutFilter, setMoveOutFilter] = useState("");
   const [items, setItems] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Partial<Client> | null>(null);
@@ -56,7 +59,9 @@ function ContactsPage() {
     setSelected({}); // clear selection when list changes
   }, [q]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const openCreate = () => {
     const params = new URLSearchParams(searchParams);
@@ -91,7 +96,7 @@ function ContactsPage() {
           email: "",
           phone: "",
           birthday: "",
-          budgetMin: null,
+          moveOutDate: "",
           budgetMax: null,
           lastRentalStatus: "none",
           tags: "",
@@ -102,17 +107,24 @@ function ContactsPage() {
         return;
       }
       if (editId) {
-        const fromList = items.find(i => i.id === editId);
-        if (fromList) { active && setForm(fromList); return; }
+        const fromList = items.find((i) => i.id === editId);
+        if (fromList) {
+          active && setForm(fromList);
+          return;
+        }
         const r = await fetch(`/api/clients/${editId}`, { cache: "no-store" });
-        if (r.ok) { const one = await r.json(); active && setForm(one); }
-        else active && setForm(null);
+        if (r.ok) {
+          const one = await r.json();
+          active && setForm(one);
+        } else active && setForm(null);
       } else {
         setForm(null);
       }
     }
     hydrate();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [editId, isNew, items]);
 
   async function save() {
@@ -131,10 +143,15 @@ function ContactsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (res.ok) { closeModal(); await load(); }
-    else {
+    if (res.ok) {
+      closeModal();
+      await load();
+    } else {
       const j = await res.json().catch(() => ({}));
-      if (res.status === 409) { alert(j?.error || "Email already exists."); return; }
+      if (res.status === 409) {
+        alert(j?.error || "Email already exists.");
+        return;
+      }
       alert(j?.error || "Save failed");
     }
   }
@@ -147,40 +164,55 @@ function ContactsPage() {
 
   // Selection helpers
   const toggleSelect = (id: string, checked: boolean) =>
-    setSelected(prev => ({ ...prev, [id]: checked }));
+    setSelected((prev) => ({ ...prev, [id]: checked }));
 
   const anySelected = useMemo(() => Object.values(selected).some(Boolean), [selected]);
 
   const filteredSorted = useMemo(() => {
     const raw = q.trim().toLowerCase();
-    if (!raw) return [...items].sort(sortByName);
     const tokens = raw.split(/[,\s]+/).filter(Boolean);
 
     function matches(c: Client) {
-      const pack: string[] = [
-        c.firstName, c.lastName, c.email ?? "", c.phone ?? "",
-        c.tags ?? "", c.lookingFor ?? "", c.lastRentalNotes ?? "",
-        c.agentOnJob ?? "",
-        c.lastRentalStatus ?? "none",
-      ].map(s => (s ?? "").toString().toLowerCase());
+      // Month-only filters (01–12), ignore year and day
+      if (birthdayFilter) {
+        const bdMonth = getMonthKey(c.birthday);
+        if (bdMonth !== birthdayFilter) return false;
+      }
+      if (moveOutFilter) {
+        const moMonth = getMonthKey(c.moveOutDate);
+        if (moMonth !== moveOutFilter) return false;
+      }
 
-      if (c.birthday) pack.push(new Date(c.birthday).toISOString().slice(0, 10));
-      if (typeof c.budgetMin === "number") pack.push(String(c.budgetMin));
+      if (tokens.length === 0) return true;
+
+      const pack: string[] = [
+        c.firstName,
+        c.lastName,
+        c.email ?? "",
+        c.phone ?? "",
+        c.tags ?? "",
+        c.lookingFor ?? "",
+        c.lastRentalNotes ?? "",
+        c.agentOnJob ?? "",
+      ].map((s) => (s ?? "").toString().toLowerCase());
+
+      if (c.birthday) pack.push(toDateInputValue(c.birthday).toLowerCase());
+      if (c.moveOutDate) pack.push(toDateInputValue(c.moveOutDate).toLowerCase());
       if (typeof c.budgetMax === "number") pack.push(String(c.budgetMax));
 
       const hay = pack.join(" ");
-      return tokens.every(t => hay.includes(t));
+      return tokens.every((t) => hay.includes(t));
     }
 
     return items.filter(matches).sort(sortByName);
-  }, [items, q]);
+  }, [items, q, birthdayFilter, moveOutFilter]);
 
-  const allSelectedOnPage = filteredSorted.length > 0 && filteredSorted.every(c => selected[c.id]);
-  const someSelectedOnPage = filteredSorted.some(c => selected[c.id]) && !allSelectedOnPage;
+  const allSelectedOnPage = filteredSorted.length > 0 && filteredSorted.every((c) => selected[c.id]);
+  const someSelectedOnPage = filteredSorted.some((c) => selected[c.id]) && !allSelectedOnPage;
 
   const selectedEmails = useMemo(() => {
     const set = new Set<string>();
-    filteredSorted.forEach(i => {
+    filteredSorted.forEach((i) => {
       const useIt = anySelected ? !!selected[i.id] : true;
       if (useIt && i.email) set.add(i.email);
     });
@@ -188,7 +220,10 @@ function ContactsPage() {
   }, [filteredSorted, selected, anySelected]);
 
   async function copyEmails() {
-    if (selectedEmails.length === 0) { alert("No emails to copy."); return; }
+    if (selectedEmails.length === 0) {
+      alert("No emails to copy.");
+      return;
+    }
     const text = selectedEmails.join(", ");
     try {
       await navigator.clipboard.writeText(text);
@@ -198,7 +233,10 @@ function ContactsPage() {
     }
   }
   function emailAll() {
-    if (selectedEmails.length === 0) { alert("No emails to email."); return; }
+    if (selectedEmails.length === 0) {
+      alert("No emails to email.");
+      return;
+    }
     const bcc = encodeURIComponent(selectedEmails.join(","));
     window.location.href = `mailto:?bcc=${bcc}`;
   }
@@ -206,32 +244,106 @@ function ContactsPage() {
   function sortByName(a: Client, b: Client) {
     const la = (a.lastName || "").toLowerCase();
     const lb = (b.lastName || "").toLowerCase();
-    if (la === lb) return (a.firstName || "").toLowerCase().localeCompare((b.firstName || "").toLowerCase());
+    if (la === lb)
+      return (a.firstName || "")
+        .toLowerCase()
+        .localeCompare((b.firstName || "").toLowerCase());
     return la.localeCompare(lb);
   }
 
-  const setField = <K extends keyof Client>(k: K, v: Client[K]) => setForm(prev => ({ ...(prev as any), [k]: v }));
+  const setField = <K extends keyof Client>(k: K, v: Client[K]) =>
+    setForm((prev) => ({ ...(prev as any), [k]: v }));
 
   return (
     <div className="space-y-5 w-full">
       {/* Title */}
       <div>
         <h1 className="text-2xl font-bold text-white mt-1">Clients</h1>
-        <p className="text-sm text-gray-400">Manage client records and rental/budget details.</p>
+        <p className="text-sm text-gray-400">
+          Manage client records, contact details, dates, and budgets.
+        </p>
       </div>
 
       {/* Search FIRST (mobile-friendly full width) */}
       <div className="w-full">
-        <label className="sr-only" htmlFor="contact-search">Search clients</label>
+        <label className="sr-only" htmlFor="contact-search">
+          Search clients
+        </label>
         <input
           id="contact-search"
           className="input w-full"
           type="search"
           enterKeyHint="search"
-          placeholder="Search name, email, phone, tags, status, birthday, budget…"
+          placeholder="Search name, email, phone, tags, birthday, move-out, budget…"
           value={q}
-          onChange={e => setQ(e.target.value)}
+          onChange={(e) => setQ(e.target.value)}
         />
+      </div>
+
+      {/* Month filters */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div>
+          <label className="label" htmlFor="birthday-filter">
+            Birthday month
+          </label>
+          <select
+            id="birthday-filter"
+            className="input"
+            value={birthdayFilter}
+            onChange={(e) => setBirthdayFilter(e.target.value)}
+          >
+            <option value="">All months</option>
+            <option value="01">January</option>
+            <option value="02">February</option>
+            <option value="03">March</option>
+            <option value="04">April</option>
+            <option value="05">May</option>
+            <option value="06">June</option>
+            <option value="07">July</option>
+            <option value="08">August</option>
+            <option value="09">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="moveout-filter">
+            Move-out month
+          </label>
+          <select
+            id="moveout-filter"
+            className="input"
+            value={moveOutFilter}
+            onChange={(e) => setMoveOutFilter(e.target.value)}
+          >
+            <option value="">All months</option>
+            <option value="01">January</option>
+            <option value="02">February</option>
+            <option value="03">March</option>
+            <option value="04">April</option>
+            <option value="05">May</option>
+            <option value="06">June</option>
+            <option value="07">July</option>
+            <option value="08">August</option>
+            <option value="09">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+          </select>
+        </div>
+        {(birthdayFilter || moveOutFilter) && (
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() => {
+              setBirthdayFilter("");
+              setMoveOutFilter("");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* Actions — wrap on mobile */}
@@ -243,7 +355,9 @@ function ContactsPage() {
           {anySelected ? "Email Selected" : "Email All"}
         </button>
         <div className="ms-auto">
-          <button className="btn" onClick={openCreate}>Add</button>
+          <button className="btn" onClick={openCreate}>
+            Add
+          </button>
         </div>
       </div>
 
@@ -258,41 +372,70 @@ function ContactsPage() {
                     aria-label="Select all"
                     type="checkbox"
                     checked={allSelectedOnPage}
-                    ref={el => {
+                    ref={(el) => {
                       if (el) el.indeterminate = someSelectedOnPage;
                     }}
                     onChange={(e) => {
                       const checked = e.currentTarget.checked;
                       const updates: Record<string, boolean> = {};
-                      filteredSorted.forEach(c => { updates[c.id] = checked; });
-                      setSelected(prev => ({ ...prev, ...updates }));
+                      filteredSorted.forEach((c) => {
+                        updates[c.id] = checked;
+                      });
+                      setSelected((prev) => ({ ...prev, ...updates }));
                     }}
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-gray-400 font-semibold">Name / Tags</th>
-                <th className="px-4 py-3 text-left text-gray-400 font-semibold">Email</th>
-                <th className="px-4 py-3 text-left text-gray-400 font-semibold">Phone</th>
-                <th className="px-4 py-3 text-left text-gray-400 font-semibold">Status</th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold">
+                  Name / Tags
+                </th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold">
+                  Email
+                </th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold">
+                  Phone
+                </th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold">
+                  Dates
+                </th>
                 {/* Hide less-critical columns on small screens */}
-                <th className="px-4 py-3 text-left text-gray-400 font-semibold hidden md:table-cell">Budget</th>
-                <th className="px-4 py-3 text-left text-gray-400 font-semibold hidden md:table-cell">Agent on job</th>
-                <th className="px-4 py-3 text-right text-gray-400 font-semibold">Actions</th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold hidden md:table-cell">
+                  Budget (Max)
+                </th>
+                <th className="px-4 py-3 text-left text-gray-400 font-semibold hidden md:table-cell">
+                  Agent on job
+                </th>
+                <th className="px-4 py-3 text-right text-gray-400 font-semibold">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-6 text-gray-500">Loading…</td></tr>
+                <tr>
+                  <td colSpan={8} className="text-center py-6 text-gray-500">
+                    Loading…
+                  </td>
+                </tr>
               ) : filteredSorted.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-6 text-gray-500">No clients found.</td></tr>
+                <tr>
+                  <td colSpan={8} className="text-center py-6 text-gray-500">
+                    No clients found.
+                  </td>
+                </tr>
               ) : (
                 filteredSorted.map((c, i) => (
                   <tr
                     key={c.id}
-                    className={(i % 2 === 0 ? "bg-slate-950/40 " : "bg-slate-900/40 ") + "cursor-pointer hover:bg-indigo-500/10 transition"}
+                    className={
+                      (i % 2 === 0 ? "bg-slate-950/40 " : "bg-slate-900/40 ") +
+                      "cursor-pointer hover:bg-indigo-500/10 transition"
+                    }
                     onClick={() => openEdit(c.id)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={e => (e.key === "Enter" || e.key === " ") && openEdit(c.id)}
+                    onKeyDown={(e) =>
+                      (e.key === "Enter" || e.key === " ") && openEdit(c.id)
+                    }
                   >
                     <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -306,27 +449,45 @@ function ContactsPage() {
                       />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-white">{c.firstName} {c.lastName}</div>
+                      <div className="font-medium text-white">
+                        {c.firstName} {c.lastName}
+                      </div>
                       {c.tags && (
                         <div className="mt-1">
                           {c.tags.split(",").map((t, idx) => (
-                            <span key={`${t}-${idx}`} className="pill mr-2">{t.trim()}</span>
+                            <span key={`${t}-${idx}`} className="pill mr-2">
+                              {t.trim()}
+                            </span>
                           ))}
                         </div>
                       )}
                     </td>
                     <td className="px-4 py-3">{c.email ?? "—"}</td>
                     <td className="px-4 py-3">{c.phone ?? "—"}</td>
-                    <td className="px-4 py-3 capitalize">{(c.lastRentalStatus || "none").replace("_"," ")}</td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      {(typeof c.budgetMin === "number" || typeof c.budgetMax === "number")
-                        ? `${c.budgetMin ?? "—"} – ${c.budgetMax ?? "—"}`
-                        : "—"}
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-gray-100">
+                        <div>
+                          Birthday:{" "}
+                          {c.birthday ? toDateInputValue(c.birthday) : "—"}
+                        </div>
+                        <div>
+                          Move out:{" "}
+                          {c.moveOutDate ? toDateInputValue(c.moveOutDate) : "—"}
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell">{c.agentOnJob || "—"}</td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      {typeof c.budgetMax === "number" ? c.budgetMax : "—"}
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      {c.agentOnJob || "—"}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <button
-                        onClick={(e) => { e.stopPropagation(); archive(c.id); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          archive(c.id);
+                        }}
                         className="text-red-400 hover:text-red-300 text-sm font-medium"
                       >
                         Archive
@@ -347,8 +508,12 @@ function ContactsPage() {
           size="lg"
           footer={
             <>
-              <button className="btn secondary" onClick={closeModal}>Cancel</button>
-              <button className="btn" onClick={save}>Save</button>
+              <button className="btn secondary" onClick={closeModal}>
+                Cancel
+              </button>
+              <button className="btn" onClick={save}>
+                Save
+              </button>
             </>
           }
         >
@@ -361,7 +526,7 @@ function ContactsPage() {
                 autoCapitalize="words"
                 enterKeyHint="next"
                 value={form?.firstName || ""}
-                onChange={e => setField("firstName", e.target.value)}
+                onChange={(e) => setField("firstName", e.target.value)}
               />
             </div>
             <div className="field">
@@ -372,7 +537,7 @@ function ContactsPage() {
                 autoCapitalize="words"
                 enterKeyHint="next"
                 value={form?.lastName || ""}
-                onChange={e => setField("lastName", e.target.value)}
+                onChange={(e) => setField("lastName", e.target.value)}
               />
             </div>
 
@@ -385,7 +550,7 @@ function ContactsPage() {
                 autoComplete="email"
                 enterKeyHint="next"
                 value={form?.email || ""}
-                onChange={e => setField("email", e.target.value)}
+                onChange={(e) => setField("email", e.target.value)}
               />
             </div>
             <div className="field">
@@ -397,7 +562,7 @@ function ContactsPage() {
                 autoComplete="tel"
                 enterKeyHint="done"
                 value={form?.phone || ""}
-                onChange={e => setField("phone", e.target.value)}
+                onChange={(e) => setField("phone", e.target.value)}
               />
             </div>
 
@@ -408,40 +573,28 @@ function ContactsPage() {
                 className="input"
                 enterKeyHint="done"
                 value={form?.birthday ? toDateInputValue(form.birthday) : ""}
-                onChange={e => setField("birthday", e.target.value ? e.target.value : "")}
+                onChange={(e) =>
+                  setField("birthday", e.target.value ? e.target.value : "")
+                }
               />
-            </div>
-            <div className="field">
-              <label className="label">Rental Status</label>
-              <select
-                className="input"
-                value={form?.lastRentalStatus || "none"}
-                onChange={e => setField("lastRentalStatus", e.target.value as RentalStatus)}
-              >
-                <option value="none">None</option>
-                <option value="applied">Applied</option>
-                <option value="approved">Approved</option>
-                <option value="declined">Declined</option>
-                <option value="moved_in">Moved in</option>
-                <option value="moved_out">Moved out</option>
-              </select>
             </div>
 
-            {/* Safer numeric inputs — avoid NaN */}
             <div className="field">
-              <label className="label">Budget Min</label>
+              <label className="label">Move Out Date</label>
               <input
-                type="number"
-                inputMode="numeric"
+                type="date"
                 className="input"
                 enterKeyHint="done"
-                value={form?.budgetMin ?? ""}
-                onChange={(e) => {
-                  const val = e.currentTarget.value.trim();
-                  setField("budgetMin", val === "" ? null : Number.isFinite(Number(val)) ? Number(val) : (form?.budgetMin ?? null));
-                }}
+                value={
+                  form?.moveOutDate ? toDateInputValue(form.moveOutDate) : ""
+                }
+                onChange={(e) =>
+                  setField("moveOutDate", e.target.value ? e.target.value : "")
+                }
               />
             </div>
+
+            {/* Only Budget Max now */}
             <div className="field">
               <label className="label">Budget Max</label>
               <input
@@ -452,7 +605,14 @@ function ContactsPage() {
                 value={form?.budgetMax ?? ""}
                 onChange={(e) => {
                   const val = e.currentTarget.value.trim();
-                  setField("budgetMax", val === "" ? null : Number.isFinite(Number(val)) ? Number(val) : (form?.budgetMax ?? null));
+                  setField(
+                    "budgetMax",
+                    val === ""
+                      ? null
+                      : Number.isFinite(Number(val))
+                      ? Number(val)
+                      : form?.budgetMax ?? null
+                  );
                 }}
               />
             </div>
@@ -464,7 +624,7 @@ function ContactsPage() {
                 type="text"
                 enterKeyHint="next"
                 value={form?.agentOnJob || ""}
-                onChange={e => setField("agentOnJob", e.target.value)}
+                onChange={(e) => setField("agentOnJob", e.target.value)}
               />
             </div>
 
@@ -475,7 +635,7 @@ function ContactsPage() {
                 type="text"
                 enterKeyHint="done"
                 value={form?.tags || ""}
-                onChange={e => setField("tags", e.target.value)}
+                onChange={(e) => setField("tags", e.target.value)}
               />
             </div>
 
@@ -486,7 +646,7 @@ function ContactsPage() {
                 type="text"
                 enterKeyHint="done"
                 value={form?.lookingFor || ""}
-                onChange={e => setField("lookingFor", e.target.value)}
+                onChange={(e) => setField("lookingFor", e.target.value)}
               />
             </div>
 
@@ -496,7 +656,7 @@ function ContactsPage() {
                 className="input"
                 rows={3}
                 value={form?.lastRentalNotes || ""}
-                onChange={e => setField("lastRentalNotes", e.target.value)}
+                onChange={(e) => setField("lastRentalNotes", e.target.value)}
               />
             </div>
           </div>
@@ -513,4 +673,13 @@ function toDateInputValue(v?: string | null) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).toString().padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+// Return "01"–"12" for a given date string, or "" if invalid/missing
+function getMonthKey(v?: string | null) {
+  if (!v) return "";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "";
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return mm;
 }
